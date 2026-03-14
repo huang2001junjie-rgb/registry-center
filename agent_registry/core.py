@@ -29,7 +29,7 @@ class RegistryCore:
     # ---------- Private helpers ----------
     def _make_key(self, name: str, organization: str) -> Tuple[str, str]:
         """Create a normalized key for indexing."""
-        return (name.strip(), organization.strip())
+        return name.strip(), organization.strip()
 
     def _save(self) -> None:
         """Persist current agents to file."""
@@ -41,12 +41,6 @@ class RegistryCore:
         data_list = load_from_file(self.persistence_file)
         for item in data_list:
             try:
-                # Validate required fields
-                name = item.get("name")
-                provider = item.get("provider")
-                if not name or not provider or not provider.get("organization"):
-                    logger.warning(f"Skipping invalid agent entry: missing name or provider.organization")
-                    continue
                 agent = AgentCard(**item)
                 key = self._make_key(agent.name, agent.provider.organization)
                 self._agents[key] = agent
@@ -63,9 +57,6 @@ class RegistryCore:
         if len(self._agents) > MAX_REGISTER_NUM:
             logger.error("Too many agents registered. Please deregister some agents.")
             return False
-
-        if not agent.name or not agent.provider or not agent.provider.organization:
-            raise ValueError("Agent must have 'name' and 'provider.organization'")
 
         key = self._make_key(agent.name, agent.provider.organization)
         if key in self._agents:

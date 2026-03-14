@@ -1,12 +1,17 @@
 import re
 
-from a2a.types import AgentCard
+from a2a.types import AgentCard, AgentProvider
 from pydantic import field_validator, model_validator, HttpUrl
 
 _NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]+$')
 
 
 class ValidatedAgentCard(AgentCard):
+    """
+    A2A-T requires information about the agent's service provider.
+    """
+    provider: AgentProvider
+
     @field_validator('name')
     def validate_name(cls, v: str) -> str:
         """验证名称仅包含字母、数字和下划线"""
