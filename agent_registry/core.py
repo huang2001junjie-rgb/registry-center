@@ -1,14 +1,15 @@
 # agent_registry/core.py
 import json
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple
+
 from a2a.types import AgentCard
 from loguru import logger
 
+from agent_registry.config import PERSISTENCE_FILE, DEFAULT_LLM_TYPE, MAX_REGISTER_NUM
+from agent_registry.persistence import save_to_file, load_from_file
+from agent_registry.prompts import build_agent_selection_prompt  # assumed to exist
 from common.llm.config.llm_config import LLMType, get_llm_config_by_type
 from common.llm.provider.llm_provider_registry import get_or_create_llm_instance
-from agent_registry.persistence import save_to_file, load_from_file
-from agent_registry.config import PERSISTENCE_FILE, DEFAULT_LLM_TYPE
-from agent_registry.prompts import build_agent_selection_prompt  # assumed to exist
 
 
 class RegistryCore:
@@ -59,7 +60,7 @@ class RegistryCore:
         Register a new agent. Returns True if successful, False if duplicate.
         Raises ValueError if agent lacks required fields (name, provider.organization).
         """
-        if len(self._agents) > 40:
+        if len(self._agents) > MAX_REGISTER_NUM:
             logger.error("Too many agents registered. Please deregister some agents.")
             return False
 
