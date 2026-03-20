@@ -3,7 +3,6 @@ import os
 import json
 import threading
 from datetime import datetime, timezone
-from enum import StrEnum
 from typing import Dict, Any
 
 from common.util.config_util import get_root_path, load_configs
@@ -11,20 +10,24 @@ from common.util.config_util import get_root_path, load_configs
 # 文件权限：600 -> 属主读写，其他无权限
 FILE_PERMISSION_MODE = 0o600
 
-class LogLevel(StrEnum):
+
+class LogLevel:
     DANGER = "Critical"
     MINOR = "General"
     INFO = "Informational"
 
-class OperationName(StrEnum):
+
+class OperationName:
     START_SERVICE = "Start Service"
     REGISTER_AGENT = "Register Agent"
 
-class OperatorObject(StrEnum):
+
+class OperatorObject:
     SERVICE = "Service"
     AGENT = "Agent"
 
-class OperationResult(StrEnum):
+
+class OperationResult:
     SUCCESS = "Success"
     FAILURE = "Failure"
 
@@ -96,7 +99,6 @@ class AuditLogger:
         except Exception as e:
             print(f"Error: failed to create new log file: {e}")
 
-
     def _write_log(self, log_entry: Dict[str, Any]):
         """写入单条日志，线程安全"""
         with self.lock:
@@ -105,7 +107,6 @@ class AuditLogger:
                 f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
             # 确保权限（尤其新创建时）
             os.chmod(self.log_file, FILE_PERMISSION_MODE)
-
 
     def log(self,
             operation_name: str,
@@ -136,7 +137,6 @@ class AuditLogger:
             "details": details or {}
         }
         self._write_log(log_entry)
-
 
 
 audit_logger = AuditLogger()

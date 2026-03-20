@@ -8,10 +8,10 @@ and persistence using a JSON file.
 """
 
 import asyncio
-import time
 from functools import partial, lru_cache
 from typing import List, Optional, Tuple
 
+import anyio
 from a2a.types import AgentCard
 from fastapi import FastAPI, HTTPException, Query, Request, Depends, status
 from loguru import logger
@@ -22,7 +22,6 @@ from agent_registry.config import (
     PERSISTENCE_FILE,
     MAX_REQUEST_BODY_SIZE,
     MAX_URL_LENGTH,
-    MAX_REQUEST_RATE,
 )
 from agent_registry.core import RegistryCore
 from agent_registry.middleware import ConnectionLimitMiddleware, TimeoutMiddleware
@@ -39,13 +38,37 @@ limiter = strategies.MovingWindowRateLimiter(sync_storage)
 
 def parse_rate_limit(interface_name: str):
     """
-    Parse a rate limit string like "10/minute" into a RateLimitItem.
-    Returns None if parsing fails.
+    Parse rate limit for the given interface name and return a RateLimitItem.
+    Returns None if parsing fails or interface is unknown.
+    The rate value is read from config with a default of 10, and unit is fixed to "/second".
     """
-    rate_string = f"{int(config.get('flowcontrol.ratelimit.register', 1))}/second" if interface_name == "register" \
-        else f"{int(config.get('flowcontrol.ratelimit.query', 10))}/second"
-    items = parse_many(rate_string)
-    return items[0] if items else None
+    # Mapping from interface name to config key and default value
+    config_map = {
+        "register": ("flowcontrol.ratelimit.register", 10),
+        "query": ("flowcontrol.ratelimit.query", 10),
+    }
+
+    # Get the corresponding config entry
+    entry = config_map.get(interface_name)
+    if entry is None:
+        logger.warning(f"Unknown interface '{interface_name}', cannot get rate limit")
+        return None
+
+    key, default_value = entry
+    try:
+        # Read config value and convert to int; fallback to default if invalid
+        rate_value = int(config.get(key, default_value))
+    except (ValueError, TypeError):
+        logger.error(f"Config key '{key}' has invalid value, using default {default_value}")
+        rate_value = default_value
+
+    rate_string = f"{rate_value}/second"
+    try:
+        items = parse_many(rate_string)
+        return items[0] if items else None
+    except Exception as e:
+        logger.error(f"Failed to parse rate limit string '{rate_string}': {e}")
+        return None
 
 
 async def async_hit(rate_item, *identifiers: str, cost=1) -> bool:
@@ -103,6 +126,9 @@ app.add_middleware(
     timeout_seconds=int(config.get("connection.timeout", 30))
 )
 
+register_semaphore = anyio.Semaphore(int(config.get("flowcontrol.parallelism.registe", 1)))
+query_semaphore = anyio.Semaphore(int(config.get("flowcontrol.parallelism.query", 10)))
+
 
 # ---------- Dependency: Registry Core (Singleton) ----------
 @lru_cache(maxsize=1)
@@ -151,51 +177,50 @@ async def security_middleware(request: Request, call_next):
 
 
 # ---------- Routes ----------
-@app.post(
-    "/rest/a2a-t/v1/agents/register",
-    response_model=bool,
-    summary="Register a new agent",
-)
-async def register_agent(
-        request: Request,
-        agent: ValidatedAgentCard,
-        _: None = Depends(RateLimiter('register')),  # Apply rate limiting
-        registry: RegistryCore = Depends(get_registry),
-):
-    """
-    Register a new agent.
-    The combination (name, provider.organization) must be unique.
-    Returns True if registered, False if duplicate.
-    """
-    client_ip = request.client.host
-    details = {"agentName": agent.name, "organization": agent.provider.organization,
-               "url": agent.provider.url}
-    if len(get_registry().get_agents()) >= int(config.get('agent.num.max', 40)):
+def _check_agent_limit(registry: RegistryCore, client_ip: str, details: dict) -> None:
+    """检查注册数量是否超过上限，若超过则记录审计日志并抛出异常。"""
+    if len(registry.get_agents()) >= int(config.get('agent.num.max', 40)):
         details["message"] = "Agent registration limit exceeded."
-        audit_logger.log(operation_name=OperationName.REGISTER_AGENT,
-                         level=LogLevel.MINOR,
-                         result=OperationResult.FAILURE,
-                         object_name=OperatorObject.AGENT,
-                         details=details,
-                         client_ip=client_ip)
+        audit_logger.log(
+            operation_name=OperationName.REGISTER_AGENT,
+            level=LogLevel.MINOR,
+            result=OperationResult.FAILURE,
+            object_name=OperatorObject.AGENT,
+            details=details,
+            client_ip=client_ip,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Agent registration limit exceeded.",
         )
-    key = make_key(agent.name, agent.provider.organization)
-    if key in get_registry().get_agents():
+
+
+def _check_duplicate_agent(agent: ValidatedAgentCard, registry: RegistryCore, client_ip: str, details: dict) -> None:
+    """检查是否已存在相同 (name, organization) 的 agent，若存在则记录并抛出异常。"""
+    key = _make_agent_key(agent.name, agent.provider.organization)
+    if key in registry.get_agents():
         details["message"] = "Registration skipped: duplicate agent."
-        audit_logger.log(operation_name=OperationName.REGISTER_AGENT,
-                         level=LogLevel.MINOR,
-                         result=OperationResult.FAILURE,
-                         object_name=OperatorObject.AGENT,
-                         details=details,
-                         client_ip=client_ip)
+        audit_logger.log(
+            operation_name=OperationName.REGISTER_AGENT,
+            level=LogLevel.MINOR,
+            result=OperationResult.FAILURE,
+            object_name=OperatorObject.AGENT,
+            details=details,
+            client_ip=client_ip,
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Registration skipped: duplicate agent ({agent.name}, {agent.provider.organization})",
         )
 
+
+async def _perform_registration(
+        agent: ValidatedAgentCard,
+        registry: RegistryCore,
+        client_ip: str,
+        details: dict,
+) -> bool:
+    """执行实际的注册操作，处理可能的 ValueError 和其他异常，并记录对应日志。"""
     try:
         success = await registry.register(agent)
         audit_logger.log(operation_name=OperationName.REGISTER_AGENT,
@@ -230,6 +255,42 @@ async def register_agent(
         ) from e
 
 
+@app.post(
+    "/rest/a2a-t/v1/agents/register",
+    response_model=bool,
+    summary="Register a new agent",
+)
+async def register_agent(
+        request: Request,
+        agent: ValidatedAgentCard,
+        _: None = Depends(RateLimiter('register')),
+        registry: RegistryCore = Depends(get_registry),
+):
+    """
+    Register a new agent.
+    The combination (name, provider.organization) must be unique.
+    Returns True if registered, False if duplicate.
+    """
+    client_ip = request.client.host
+    details = {
+        "agentName": agent.name,
+        "organization": agent.provider.organization,
+        "url": agent.provider.url,
+    }
+
+    try:
+        register_semaphore.acquire_nowait()
+        _check_agent_limit(registry, client_ip, details)
+        _check_duplicate_agent(agent, registry, client_ip, details)
+
+        return await _perform_registration(agent, registry, client_ip, details)
+
+    except anyio.WouldBlock:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy")
+    finally:
+        register_semaphore.release()
+
+
 @app.get(
     "/rest/a2a-t/v1/agents/query",
     response_model=List[AgentCard],
@@ -245,6 +306,10 @@ async def list_agents_exact(
     All parameters are optional. If none provided, returns all agents.
     """
     try:
+        query_semaphore.acquire_nowait()
+    except anyio.WouldBlock:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy")
+    try:
         agents = registry.find_exact(name=name, organization=organization)
         return agents
     except Exception as e:
@@ -253,8 +318,10 @@ async def list_agents_exact(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         ) from e
+    finally:
+        query_semaphore.release()
 
 
-def make_key(name: str, organization: str) -> Tuple[str, str]:
+def _make_agent_key(name: str, organization: str) -> Tuple[str, str]:
     """Create a normalized key for indexing."""
     return name.strip(), organization.strip()
