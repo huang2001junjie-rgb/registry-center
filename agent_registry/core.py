@@ -62,16 +62,19 @@ class RegistryCore:
         Exact search based on name, organization, and provider (which is provider.organization).
         All parameters are optional; if multiple are given, they are combined with AND.
         """
-        result = []
-        for agent in self._agents.values():
-            # Check name exact match
-            if name is not None and agent.name != name:
-                continue
-            # Check organization exact match
-            if organization is not None and agent.provider.organization != organization:
-                continue
-            result.append(agent)
-        return result
+        if name is None and organization is None:
+            return [agent for agent in self._agents.values()]
+        else:
+            result = []
+            for agent in self._agents.values():
+                # Check name exact match
+                if name is not None and agent.name != name:
+                    continue
+                # Check organization exact match
+                if organization is not None and agent.provider.organization != organization:
+                    continue
+                result.append(agent)
+            return result
 
     def get_agents(self):
         return self._agents
