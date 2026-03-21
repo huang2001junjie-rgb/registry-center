@@ -41,7 +41,7 @@ class AuditLogger:
     def __init__(self):
         self.config = self._load_config()
         self.max_size = int(self.config.get("audit_log_max_file_size_mb", 5)) * 1024 * 1024  # 转为字节
-        self.backup_count = int(self.config.get("audit_log_backup_count", 4))
+        self.backup_count = int(self.config.get("audit_log_backup_count", 5)) - 1
         self.log_file = os.path.join(get_root_path(), "log", "audit", "audit.log")
         self.lock = threading.Lock()
 
