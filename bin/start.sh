@@ -11,6 +11,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/.."
 TARGET_DIR="${SCRIPT_DIR}/../agent_registry"
 
+if [ -d "$ROOT_DIR" ]; then
+    ROOT_DIR="$(cd "$ROOT_DIR" && pwd)"
+    cd $ROOT_DIR
+    echo "Current working directory: $(pwd)"
+else
+  echo "The project root path does not exist."
+  exit 1
+fi
+
 # get user information
 CURRENT_USER=$(whoami)
 CURRENT_UID=$(id -u)
