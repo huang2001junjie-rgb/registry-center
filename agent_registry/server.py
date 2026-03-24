@@ -14,6 +14,7 @@ from typing import List, Optional, Tuple, Any
 import anyio
 from a2a.types import AgentCard
 from fastapi import FastAPI, HTTPException, Query, Request, Depends, status
+from fastapi.responses import JSONResponse
 from loguru import logger
 from limits import strategies, storage, parse_many
 from starlette.responses import Response
@@ -206,7 +207,7 @@ def _check_agent_limit(registry: RegistryCore, client_ip: str, details: dict) ->
             "client_ip": client_ip
         })
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Agent registration limit exceeded.",
         )
 
@@ -281,6 +282,7 @@ async def _perform_registration(
     "/rest/a2a-t/v1/agents/register",
     response_model=bool,
     summary="Register a new agent",
+    status_code=status.HTTP_201_CREATED,
 )
 async def register_agent(
         agent: ValidatedAgentCard,
@@ -299,18 +301,22 @@ async def register_agent(
         "organization": agent.provider.organization,
         "url": agent.provider.url,
     }
-
+    acquired = False
     try:
         register_semaphore.acquire_nowait()
+        acquired = True
         _check_agent_limit(registry, client_ip, details)
         _check_duplicate_agent(agent, registry, client_ip, details)
-
-        return await _perform_registration(agent, registry, client_ip, details)
-
+        result = await _perform_registration(agent, registry, client_ip, details)
+        return JSONResponse(
+            content=result,
+            status_code=status.HTTP_201_CREATED,
+        )
     except anyio.WouldBlock:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy")
     finally:
-        register_semaphore.release()
+        if acquired:
+            register_semaphore.release()
 
 
 @app.get(
@@ -327,21 +333,24 @@ async def list_agents_exact(
     Search agents by exact fields (AND combination).
     All parameters are optional. If none provided, returns all agents.
     """
+    acquired = False
     try:
         query_semaphore.acquire_nowait()
+        acquired = True
+        try:
+            agents = registry.find_exact(name=name, organization=organization)
+            return agents
+        except Exception as e:
+            logger.error(f"Error in exact search: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error",
+            ) from e
     except anyio.WouldBlock:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy")
-    try:
-        agents = registry.find_exact(name=name, organization=organization)
-        return agents
-    except Exception as e:
-        logger.error(f"Error in exact search: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        ) from e
     finally:
-        query_semaphore.release()
+        if acquired:
+            query_semaphore.release()
 
 
 def _make_agent_key(name: str, organization: str) -> Tuple[str, str]:
