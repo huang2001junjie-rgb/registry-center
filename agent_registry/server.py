@@ -312,8 +312,8 @@ async def register_agent(
             content=result,
             status_code=status.HTTP_201_CREATED,
         )
-    except anyio.WouldBlock:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from anyio.WouldBlock
+    except anyio.WouldBlock as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
     finally:
         if acquired:
             register_semaphore.release()
@@ -346,8 +346,8 @@ async def list_agents_exact(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal server error",
             ) from e
-    except anyio.WouldBlock:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy")
+    except anyio.WouldBlock as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
     finally:
         if acquired:
             query_semaphore.release()
