@@ -17,6 +17,7 @@ from common.util.config_util import get_conf
 
 audit_handle = HandlerRegistry.get_handler(InterfaceType.AUDIT)
 
+
 def get_user_info_from_env():
     """从环境变量获取用户信息"""
     user_info = {
