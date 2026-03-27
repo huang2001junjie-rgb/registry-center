@@ -7,6 +7,7 @@ import uvicorn
 from loguru import logger
 from uvicorn import config
 
+from agent_registry.cipher_converter import CipherConverter
 from agent_registry.server import app
 from common.cert.cert_validater import CertValidator
 from common.custom.custom_handle import HandlerRegistry
@@ -98,6 +99,7 @@ class CustomUvicornServer:
             ssl_ca_certs=self.conf_obj.ssl_ca_certs,
             # 是否校验客户端证书，填了如果浏览器没证书就没法访问了
             ssl_cert_reqs=self.conf_obj.verify_client,
+            ssl_ciphers=CipherConverter.convert(self.server_config.get('tls.cipher')),
             timeout_keep_alive=0,
             timeout_graceful_shutdown=int(self.server_config.get("connection.timeout", 30)),
             log_level="info",
@@ -129,6 +131,7 @@ def main():
             "details": {"ip": server_config.get("ip", ""), "port": server_config.get("port", "")},
             "user_name": get_user_info_from_env().get('username')
         })
+        sys.exit(f"agent_registry server start failed: {e}")
 
 
 if __name__ == "__main__":
