@@ -27,4 +27,4 @@ def authenticate(client_ip: str, request: Any, context: Optional[Dict[str, Any]]
     try:
         return Principal(client_ip=client_ip)
     except Exception as e:
-        raise AuthenticationError(AuthFailureReason.INVALID_CREDENTIALS, "认证失败")
+        raise AuthenticationError(AuthFailureReason.INVALID_CREDENTIALS, "认证失败") from e

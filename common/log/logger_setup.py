@@ -16,6 +16,7 @@ LOG_FORMAT = (
     "<level>{message}</level>"
 )
 
+
 def add_module_logger(module_prefix: str):
     """
     Configures logging for a module with console and file outputs.
@@ -48,6 +49,7 @@ def add_module_logger(module_prefix: str):
         except Exception as e:
             logger.error(f"压缩或设置权限失败: {e}")
             return None
+
     logger.configure(extra={"request_id": ''})
     logger.remove()
 
@@ -59,8 +61,6 @@ def add_module_logger(module_prefix: str):
         backtrace=False,
         colorize=True,
     )
-
-
 
     # Regular log file
     logger.add(

@@ -40,6 +40,7 @@ limiter = strategies.MovingWindowRateLimiter(sync_storage)
 
 audit_handle = HandlerRegistry.get_handler(InterfaceType.AUDIT)
 
+
 def parse_rate_limit(interface_name: str):
     """
     Parse rate limit for the given interface name and return a RateLimitItem.

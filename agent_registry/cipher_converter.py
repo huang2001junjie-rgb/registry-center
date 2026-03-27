@@ -52,9 +52,9 @@ class CipherConverter:
                 converted = cls._auto_convert(cipher)
                 if converted:
                     openssl_ciphers.append(converted)
-                    print(f"警告: 自动转换 {cipher} -> {converted}")
+                    logger.info(f"警告: 自动转换 {cipher} -> {converted}")
                 else:
-                    print(f"警告: 跳过无法识别的密码套件: {cipher}")
+                    logger.info(f"警告: 跳过无法识别的密码套件: {cipher}")
 
         # 3. 用冒号连接
         return ':'.join(openssl_ciphers)
