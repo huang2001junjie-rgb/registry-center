@@ -169,7 +169,6 @@ async def security_middleware(request: Request, call_next):
                     content="Payload Too Large",
                     status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 )
-            request._body = body
         except Exception:
             return Response(
                 content="Bad Request",
@@ -234,7 +233,7 @@ async def _perform_registration(
     """执行实际的注册操作，处理可能的 ValueError 和其他异常，并记录对应日志。"""
     try:
         save_handle = HandlerRegistry.get_handler(InterfaceType.INSERT)
-        success = await save_handle.handle(agent)
+        success = await save_handle.async_handle(agent)
         audit_handle.handle({
             "operation_name": OperationName.REGISTER_AGENT,
             "level": LogLevel.MINOR,

@@ -16,29 +16,49 @@ class BaseHandler(ABC):
         """具体业务逻辑由子类实现"""
         pass
 
+    @abstractmethod
+    async def async_handle(self, *args, **kwargs):
+        """具体业务逻辑由子类实现"""
+        pass
+
 
 # ==================== 默认实现 ====================
 class DecryptHandler(BaseHandler):
+    async def async_handle(self, *args, **kwargs):
+        pass
+
     def handle(self, *args, **kwargs):
         return decrypt(*args)
 
 
 class AuditHandler(BaseHandler):
+    async def async_handle(self, *args, **kwargs):
+        pass
+
     def handle(self, *args, **kwargs):
         audit_logger.audit(*args)
 
 
 class AuthenticateHandler(BaseHandler):
+    async def async_handle(self, *args, **kwargs):
+        pass
+
     def handle(self, *args, **kwargs):
         return authenticate(*args)
 
 
 class InsertHandler(BaseHandler):
-    async def handle(self, *args, **kwargs):
+    def handle(self, *args, **kwargs):
+        pass
+
+    async def async_handle(self, *args, **kwargs):
         return await get_registry().register(*args)
 
 
 class QueryHandler(BaseHandler):
+    async def async_handle(self, *args, **kwargs):
+        pass
+
     def handle(self, *args, **kwargs):
         return get_registry().find_exact(*args)
 
