@@ -3,6 +3,7 @@ import os
 import json
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Any
 from loguru import logger
 
@@ -43,11 +44,12 @@ class AuditLogger:
         self.config = self._load_config()
         self.max_size = int(self.config.get("audit_log_max_file_size_mb", 5)) * 1024 * 1024  # 转为字节
         self.backup_count = int(self.config.get("audit_log_backup_count", 5)) - 1
-        self.log_file = os.path.join(get_root_path(), "log", "audit", "audit.log")
+        parent_path = os.path.join(get_root_path(), "log", "audit")
+        audit_log_dir = Path(parent_path)
+        audit_log_dir.mkdir(exist_ok=True)
+        os.chmod(audit_log_dir, 0o700)
+        self.log_file = os.path.join(parent_path, "audit.log")
         self.lock = threading.Lock()
-
-        # 确保日志目录存在
-        os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
 
     @staticmethod
     def _load_config() -> Dict[str, Any]:

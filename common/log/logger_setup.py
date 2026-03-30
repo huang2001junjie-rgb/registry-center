@@ -56,44 +56,49 @@ def add_module_logger(module_prefix: str):
 
     logger.configure(extra={"request_id": ''})
     logger.remove()
-
+    old_mask = os.umask(0o027)
     # Console output
-    logger.add(
-        sys.stdout,
-        format=LOG_FORMAT,
-        level="INFO",
-        backtrace=False,
-        colorize=True,
-    )
+    try:
+        logger.add(
+            sys.stdout,
+            format=LOG_FORMAT,
+            level="INFO",
+            backtrace=False,
+            colorize=True,
+        )
 
-    # Regular log file
-    logger.add(
-        _LOG_DIR / f"{module_prefix}_log_{{time:YYYY-MM-DD}}.log",
-        format=LOG_FORMAT,
-        level="INFO",
-        rotation=lambda message, file: (
-                os.stat(file.name).st_size > 10 * 1024 * 1024
-                or datetime.now(tz=timezone.utc).date() != datetime.fromtimestamp(os.path.getctime(file.name)).date()
-        ),
-        retention="30 days",
-        encoding="utf-8",
-        compression=compress_and_set_permission,
-        enqueue=True,
-    )
+        # Regular log file
+        logger.add(
+            _LOG_DIR / f"{module_prefix}_log_{{time:YYYY-MM-DD}}.log",
+            format=LOG_FORMAT,
+            level="INFO",
+            rotation=lambda message, file: (
+                    os.stat(file.name).st_size > 10 * 1024 * 1024
+                    or datetime.now(tz=timezone.utc).date() != datetime.fromtimestamp(
+                os.path.getctime(file.name)).date()
+            ),
+            retention="30 days",
+            encoding="utf-8",
+            compression=compress_and_set_permission,
+            enqueue=True,
+        )
 
-    # Error log file
-    logger.add(
-        _LOG_DIR / f"{module_prefix}_error_{{time:YYYY-MM-DD}}.log",
-        format=LOG_FORMAT,
-        level="ERROR",
-        rotation=lambda message, file: (
-                os.stat(file.name).st_size > 10 * 1024 * 1024
-                or datetime.now(tz=timezone.utc).date() != datetime.fromtimestamp(os.path.getctime(file.name)).date()
-        ),
-        retention="30 days",
-        encoding="utf-8",
-        compression=compress_and_set_permission,
-        enqueue=True,
-    )
+        # Error log file
+        logger.add(
+            _LOG_DIR / f"{module_prefix}_error_{{time:YYYY-MM-DD}}.log",
+            format=LOG_FORMAT,
+            level="ERROR",
+            rotation=lambda message, file: (
+                    os.stat(file.name).st_size > 10 * 1024 * 1024
+                    or datetime.now(tz=timezone.utc).date() != datetime.fromtimestamp(
+                os.path.getctime(file.name)).date()
+            ),
+            retention="30 days",
+            encoding="utf-8",
+            compression=compress_and_set_permission,
+            enqueue=True,
+        )
+    finally:
+        os.umask(old_mask)
 
-    logger.info("Logger initialized (file permissions set to 440)")
+
