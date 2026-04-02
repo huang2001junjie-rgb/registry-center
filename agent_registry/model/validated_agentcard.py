@@ -3,7 +3,7 @@ import re
 from a2a.types import AgentCard, AgentProvider, AgentSkill, AgentCapabilities
 from pydantic import field_validator, model_validator, HttpUrl
 
-_NAME_PATTERN = re.compile(r'^[A-Za-z0-9_]+$')
+_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]+(?:\s+[a-zA-Z0-9_]+)*$')
 
 NAME_MAX_LENGTH = 100
 ORGNIZATION_MAX_LENGTH = 100
@@ -30,9 +30,9 @@ class ValidatedAgentCard(AgentCard):
     def validate_name(cls, v: str) -> str:
         if len(v) > NAME_MAX_LENGTH:
             raise ValueError(f'The agent name can contain a maximum of {NAME_MAX_LENGTH} characters.')
-        """验证名称仅包含字母、数字和下划线"""
+        """验证名称仅包含字母、数字、下划线和空格"""
         if not _NAME_PATTERN.fullmatch(v):
-            raise ValueError('Name must contain only alphanumeric characters and underscores.')
+            raise ValueError('The name can contain only letters, digits, underscores (_), spaces.')
         return v
 
     @field_validator('description')
