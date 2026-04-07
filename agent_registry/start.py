@@ -133,7 +133,7 @@ def main():
             "level": LogLevel.DANGER,
             "result": OperationResult.FAILURE,
             "details": {"ip": server_config.get("ip", ""), "port": server_config.get("port", "")},
-            "user_name": get_user_info_from_evn().get('username')
+            "user_name": get_user_info_from_env().get('username')
         }))
         sys.exit(f"agent_registry server start failed: {e}")
 
