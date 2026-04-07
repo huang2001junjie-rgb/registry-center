@@ -27,7 +27,7 @@ CURRENT_GID=$(id -g)
 
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
-    echo "⚠  ===== Security Warning ====="
+    echo "⚠️  ===== Security Warning ====="
     echo "You are currently running as root!"
     echo "Executing commands as root may pose security risks. Please proceed with caution."
     echo "   It is recommended to use root privileges only when necessary."
