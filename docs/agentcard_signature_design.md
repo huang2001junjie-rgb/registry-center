@@ -77,6 +77,211 @@ AgentCard作为多个Agent之间交互的中转站，需要频繁接受各个Age
 }
 ```
 
+### 2.4 JWS签名结构和待签名数据说明
+
+#### JWS签名结构
+
+在JWS (JSON Web Signature) 标准中，签名的生成遵循以下结构：
+
+```
+待签名的数据 = base64url(protected) + "." + base64url(payload)
+signature = sign(待签名的数据, private_key)
+```
+
+#### 待签名数据（payload）的定义
+
+**重要**：待签名的数据（payload）是整个AgentCard的JSON字符串，**但不包含signatures字段**。
+
+这是为了防止循环引用，确保签名的完整性和一致性。
+
+#### 签名生成过程详解
+
+**步骤1：准备protected头**
+```json
+{
+    "alg": "ES256",
+    "typ": "JOSE", 
+    "kid": "key-1",
+    "jku": "https://10.10.10.10:26335/agent/jwks.json"
+}
+```
+
+**步骤2：准备AgentCard数据作为payload（不包含signatures字段）**
+```json
+{
+    "name": "TestAgent",
+    "provider": {
+        "organization": "TestOrg",
+        "url": "https://test.org"
+    },
+    "description": "Test Description",
+    "capabilities": {
+        "skills": ["text-generation", "code-generation"],
+        "input_modes": ["text/plain", "application/json"],
+        "output_modes": ["text/plain", "application/json"]
+    },
+    "default_input_modes": ["text/plain"],
+    "default_output_modes": ["text/plain"],
+    "url": "https://agent.test",
+    "version": "1.0.0",
+    "skills": [
+        {
+            "id": "skill-1",
+            "name": "TestSkill",
+            "description": "Test Skill Description",
+            "tags": ["test", "skill"],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/plain"]
+        }
+    ]
+}
+```
+
+**步骤3：base64url编码**
+```python
+protected_encoded = base64url_encode(json.dumps(protected_header))
+# 结果: "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpPU0UiLCJraWQiOiJrZXktMSIsImprdSI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYWdlbnQvandrcy5qc29uIn0"
+
+payload_encoded = base64url_encode(json.dumps(agent_card_without_signatures, sort_keys=True))
+# 结果: "eyJuYW1lIjoiVGVzdEFnZW50IiwicHJvdmlkZXIiOnsib3JnYW5pemF0aW9uIjoiVGVzdE9yZyIsInVybCI6Imh0dHBzOi8vdGVzdC5vcmci..."
+```
+
+**步骤4：构造待签名的数据**
+```python
+data_to_sign = protected_encoded + "." + payload_encoded
+# 结果: "eyJhbGci...+."+.eyJuYW1lIjoiVGVzdEFnZW50Ii..."
+```
+
+**步骤5：生成签名**
+```python
+signature = sign(data_to_sign, private_key)
+signature_encoded = base64url_encode(signature)
+# 结果: "QFdkNLNszlGj3z3u0YQGt_T9LixY3qtdQpZmsTdDHDe3fXV9y9-B3m2-XgCpzuhiLt8E0tV6HXoZKHv4GtHgKQ"
+```
+
+**步骤6：构造最终的signatures字段**
+```json
+"signatures": [
+    {
+        "protected": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpPU0UiLCJraWQiOiJrZXktMSIsImprdSI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYWdlbnQvandrcy5qc29uIn0",
+        "signature": "QFdkNLNszlGj3z3u0YQGt_T9LixY3qtdQpZmsTdDHDe3fXV9y9-B3m2-XgCpzuhiLt8E0tV6HXoZKHv4GtHgKQ"
+    }
+]
+```
+
+#### 服务端验签时的数据处理
+
+**步骤1：从请求中提取signatures字段**
+```python
+signatures = request_data["signatures"]
+```
+
+**步骤2：从请求中移除signatures字段，得到原始payload**
+```python
+agent_card_copy = request_data.copy()
+del agent_card_copy["signatures"]
+payload_json = json.dumps(agent_card_copy, sort_keys=True)
+payload_encoded = base64url_encode(payload_json)
+```
+
+**步骤3：对每个签名对象进行验证**
+```python
+for sig_obj in signatures:
+    protected_encoded = sig_obj["protected"]
+    signature_encoded = sig_obj["signature"]
+    
+    # 重新构造待签名的数据
+    data_to_verify = protected_encoded + "." + payload_encoded
+    
+    # 验证签名
+    is_valid = verify(data_to_verify, signature_encoded, public_key)
+    
+    if is_valid:
+        return "验签通过"
+```
+
+#### JWS签名结构总结
+
+| 组件 | 说明 | 示例 |
+|------|------|------|
+| **protected** | base64url编码的头部 | `eyJhbGciOiJFUzI1NiIs...` |
+| **payload** | AgentCard的JSON（除signatures） | `{"name":"TestAgent",...}` |
+| **signature** | 对(protected.payload)的签名 | `QFdkNLNszlGj3z3u0YQGt_T9...` |
+| **待签名数据** | `protected + "." + payload` | `eyJhbGci...`.`eyJuYW1lIj...` |
+
+#### 重要注意事项
+
+1. **payload不包含signatures字段**：防止循环引用和签名无限嵌套
+2. **JSON序列化要一致**：客户端和服务端使用相同的序列化方式（如`sort_keys=True`）
+3. **base64url编码**：使用URL安全的base64url编码，不是标准的base64
+4. **字段顺序敏感**：JSON字段的顺序会影响签名结果，需要保持一致性
+5. **编码格式**：使用UTF-8编码进行JSON序列化
+
+#### 客户端签名生成示例代码
+
+```python
+import json
+import base64
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import hashes, serialization
+
+def generate_agent_card_signature(agent_card_data, private_key):
+    """
+    为AgentCard生成JWS签名
+    
+    Args:
+        agent_card_data: AgentCard字典（不包含signatures字段）
+        private_key: ECDSA私钥
+    
+    Returns:
+        dict: 包含signatures字段的完整AgentCard
+    """
+    # 步骤1：准备protected头
+    protected_header = {
+        "alg": "ES256",
+        "typ": "JOSE",
+        "kid": "key-1",
+        "jku": "https://10.10.10.10:26335/agent/jwks.json"
+    }
+    
+    # 步骤2：序列化payload（AgentCard数据）
+    payload_json = json.dumps(agent_card_data, sort_keys=True)
+    
+    # 步骤3：base64url编码
+    protected_encoded = base64url_encode(json.dumps(protected_header))
+    payload_encoded = base64url_encode(payload_json)
+    
+    # 步骤4：构造待签名的数据
+    data_to_sign = protected_encoded + "." + payload_encoded
+    
+    # 步骤5：生成签名
+    signature = private_key.sign(
+        data_to_sign.encode('utf-8'),
+        ec.ECDSA(hashes.SHA256())
+    )
+    signature_encoded = base64url_encode(signature)
+    
+    # 步骤6：构造signatures字段
+    signatures = [
+        {
+            "protected": protected_encoded,
+            "signature": signature_encoded
+        }
+    ]
+    
+    # 步骤7：返回完整的AgentCard
+    result = agent_card_data.copy()
+    result["signatures"] = signatures
+    
+    return result
+
+def base64url_encode(data):
+    """URL安全的base64编码"""
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
+```
+
 ## 3. 验签流程设计
 
 ### 3.1 验签流程图
