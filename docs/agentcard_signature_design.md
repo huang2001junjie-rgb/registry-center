@@ -45,7 +45,7 @@ AgentCard作为多个Agent之间交互的中转站，需要频繁接受各个Age
     ],
     "signatures": [
         {
-            "protected": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpPU0UiLCJraWQiOiJrZXktMSIsImprdSI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYWdlbnQvandrcy5qc29uIn0",
+            "protected": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpPU0UiLCJraWQiOiJrZXktMSIsImprdSI6Imh0dHBzOi8vZXZz10.10.10:26335/agent/jwks.json",
             "signature": "QFdkNLNszlGj3z3u0YQGt_T9LixY3qtdQpZmsTdDHDe3fXV9y9-B3m2-XgCpzuhiLt8E0tV6HXoZKHv4GtHgKQ"
         }
     ]
@@ -98,9 +98,9 @@ signature = sign(待签名的数据， private_key)
 
 | 组件 | 说明 | 示例 |
 |------|------|------|
-| **protected** | base64url编码的头部 | `eyJhbGciOiJFUzI1NiIs...` |
+| **protected** | base64url编码的头部 | `eyJhbGci...` |
 | **payload** | AgentCard的JSON（除signatures） | `{"name":"TestAgent",...}` |
-| **signature** | 对(protected.payload)的签名 | `QFdkNLNszlGj3z3u0YQGt_T9...` |
+| **signature** | 对(protected.payload)的签名 | `QFdkNLNszlGj...` |
 | **待签名数据** | `protected + "." + payload` | `eyJhbGci...`.`eyJuYW1lIj...` |
 
 #### 重要注意事项
@@ -158,7 +158,7 @@ signature = sign(待签名的数据， private_key)
     │  │  │                   │ 7. 从protected.jku获取jwks.json
     │  │  │                   ▼
     │  │  │           ┌─────────────────────────────────┐
-    │  │  │           │   成功获取JWKS？               │
+    │  │  │           │   成功获取JWKS？                 │
     │  │  │           └────────┬────────────────────────┘
     │  │  │       ┌───────────┴───────────┐
     │  │  │       │                       │
@@ -180,56 +180,6 @@ signature = sign(待签名的数据， private_key)
     │
     └──────────────────────────────────→ 返回错误
 ```
-
-### 3.2 详细验签步骤
-
-#### 步骤1：检查验签开关
-- 检查配置文件中的验签开关状态
-- 如果关闭，跳过验签直接处理业务逻辑
-- 如果开启（默认），进入验签流程
-
-#### 步骤2：提取signatures字段
-- 从请求体中提取`signatures`字段
-- 如果不存在，返回验签失败错误
-
-#### 步骤3：遍历signatures数组
-- 对`signatures`数组中的每个签名对象进行处理
-- 支持密钥轮转场景
-
-#### 步骤4：读取kid
-- 从`signatures[i].protected`中解码获取`kid`（密钥ID）
-- `kid`用于标识和查找对应的公钥
-
-#### 步骤5：优先从后台存储的公钥中寻找
-- 根据从请求头中获取的`organization`和`agent-name`
-- 构造文件路径：`/etc/sign_verify/jwks/{organization}/{agent-name}.json`
-- 从该文件中查找是否存在对应`kid`的公钥
-
-#### 步骤6：使用后台公钥验签
-- 如果找到对应`kid`的公钥，使用该公钥进行验签
-- 使用cryptography库进行JWS验证
-- 验签成功则视为验签通过
-
-#### 步骤7：从jku获取临时公钥
-- 如果后台未找到对应`kid`的公钥
-- 从`protected`字段解码获取`jku` (JWK Set URL)
-- 发送HTTP请求到`jku`获取JWKS (JSON Web Key Set)
-
-#### 步骤8：从JWKS中获取公钥
-- 从JWKS中根据`kid`查找对应的公钥
-- 如果找不到，继续下一个签名对象
-
-#### 步骤9：使用临时公钥验签
-- 使用从`jku`获取的临时公钥验签
-- 使用cryptography库进行JWS验证
-- **不缓存临时公钥**（每次都重新获取）
-
-#### 步骤10：返回验签结果
-- 验签成功：继续处理业务逻辑
-- 验签失败：继续下一个签名对象
-
-#### 步骤11：验签失败
-- 如果所有签名对象都验签失败，返回验签失败错误
 
 ## 4. 数据模型设计
 
@@ -580,43 +530,22 @@ def get_storage_path(organization: str, agent_name: str) -> str:
     return os.path.join(org_dir, f"{agent_name}.json")
 ```
 
-## 8. 基于cryptography的JWS验证实现
+## 8. 签名验证实现设计
 
-### 8.1 base64url编码/解码工具
-
-```python
-import base64
-
-def base64url_encode(data: bytes) -> str:
-    """base64url编码"""
-    return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
-
-def base64url_decode(data: str) -> bytes:
-    """base64url解码"""
-    # 添加填充符
-    padding = 4 - len(data) % 4
-    if padding != 4:
-        data += '=' * padding
-    return base64.urlsafe_b64decode(data)
-```
-
-### 8.2 JWS签名验证实现
+### 8.1 使用python-jose进行签名验证
 
 ```python
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
-from cryptography.exceptions import InvalidSignature
+from jose import jwk, jws
+from jose.exceptions import JWSError, JWKError
 
-def verify_jws_signature(
+def verify_signature_with_jose(
     protected: str,
     payload: str,
     signature: str,
     public_key_jwk: dict
 ) -> bool:
     """
-    使用cryptography库验证JWS签名
+    使用python-jose进行签名验证
     
     Args:
         protected: base64url编码的protected头
@@ -628,99 +557,33 @@ def verify_jws_signature(
         bool: 验证结果
     """
     try:
-        # 步骤1：构造待验证的数据
-        data_to_verify = f"{protected}.{payload}"
+        # 构造JWS对象
+        jws = {
+            "protected": protected,
+            "payload": payload,
+            "signature": signature
+        }
         
-        # 步骤2：解码签名
-        signature_bytes = base64url_decode(signature)
+        # 从JWK构造公钥对象
+        public_key = jwk.construct_key(public_key_jwk)
         
-        # 步骤3：从JWK构造公钥对象
-        public_key = jwk_to_cryptography_key(public_key_jwk)
-        
-        # 步骤4：根据算法类型验证签名
-        alg = public_key_jwk.get('alg')
-        
-        if alg == 'ES256':
-            # ECDSA P-256签名验证
-            public_key.verify(
-                signature_bytes,
-                data_to_verify.encode('utf-8'),
-                ec.ECDSA(hashes.SHA256())
-            )
-        elif alg == 'RS256':
-            # RSA PKCS1v15签名验证
-            public_key.verify(
-                signature_bytes,
-                data_to_verify.encode('utf-8'),
-                padding.PKCS1v15(),
-                hashes.SHA256()
-            )
-        else:
-            raise ValueError(f"不支持的算法: {alg}")
+        # 验证签名
+        jws.verify(
+            jws,
+            public_key,
+            algorithms=['ES256', 'RS256']
+        )
         
         return True
-    except InvalidSignature:
-        return False
-    except Exception as e:
+    except (JWSError, JWKError) as e:
         logger.error(f"签名验证失败: {e}")
         return False
+    except Exception as e:
+        logger.error(f"签名验证异常: {e}")
+        return False
 ```
 
-### 8.3 JWK到cryptography公钥转换
-
-```python
-def jwk_to_cryptography_key(jwk: dict):
-    """
-    将JWK格式的公钥转换为cryptography库的公钥对象
-    
-    Args:
-        jwk: JWK格式的公钥字典
-    
-    Returns:
-        cryptography公钥对象
-    """
-    kty = jwk.get('kty')
-    
-    if kty == 'EC':
-        # ECDSA公钥
-        crv = jwk.get('crv')
-        x = base64url_decode(jwk['x'])
-        y = base64url_decode(jwk['y'])
-        
-        # 根据曲线选择
-        if crv == 'P-256':
-            curve = ec.SECP256R1()
-        elif crv == 'P-384':
-            curve = ec.SECP384R1()
-        else:
-            raise ValueError(f"不支持的曲线: {crv}")
-        
-        # 构造公钥
-        public_numbers = ec.EllipticCurvePublicNumbers(
-            x=int.from_bytes(x, byteorder='big'),
-            y=int.from_bytes(y, byteorder='big'),
-            curve=curve
-        )
-        
-        return ec.EllipticCurvePublicKey(public_numbers, default_backend())
-    
-    elif kty == 'RSA':
-        # RSA公钥
-        n = base64url_decode(jwk['n'])
-        e = base64url_decode(jwk['e'])
-        
-        public_numbers = rsa.RSAPublicNumbers(
-            e=int.from_bytes(e, byteorder='big'),
-            n=int.from_bytes(n, byteorder='big')
-        )
-        
-        return rsa.RSAPublicKey(public_numbers, default_backend())
-    
-    else:
-        raise ValueError(f"不支持的密钥类型: {kty}")
-```
-
-### 8.4 完整验签流程实现
+### 8.2 完整验签流程实现
 
 ```python
 class AgentCardValidator:
@@ -765,7 +628,7 @@ class AgentCardValidator:
             backend_key = self._try_backend_key(kid, organization, agent_name)
             if backend_key:
                 # 使用后台公钥验签
-                if self._verify_jws_signature(
+                if self._verify_with_jose(
                     sig_obj.protected,
                     payload,
                     sig_obj.signature,
@@ -781,7 +644,7 @@ class AgentCardValidator:
                 )
                 if temporary_key:
                     # 使用临时公钥验签
-                    if self._verify_jws_signature(
+                    if self._verify_with_jose(
                         sig_obj.protected,
                         payload,
                         sig_obj.signature,
@@ -835,12 +698,12 @@ class AgentCardValidator:
 - **公钥验证**：验证公钥格式和算法
 
 ### 10.2 网络安全
-- **`HTTPS传输**：jku URL必须使用HTTPS
+- **HTTPS传输**：jku URL必须使用HTTPS
 - **超时控制**：防止长时间等待
 - **重试限制**：限制重试次数
 
 ### 10.3 算法安全
-- **算法白名单**：只允许安全的签名算法（ES256, RS256）
+- **算法白名单**：只允许安全的签名算法
 - **密钥类型约束**：仅支持EC或RSA公钥
 - **密钥长度验证**：验证密钥长度符合要求
 
@@ -860,7 +723,6 @@ class AgentCardValidator:
 - 公钥管理器测试
 - JWK获取器测试
 - AgentCard验证器测试
-- JWS签名验证测试
 
 ### 12.2 集成测试
 - 完整验签流程测试
@@ -877,18 +739,16 @@ class AgentCardValidator:
 ## 13. 实现优先级
 
 ### Phase 1: 核心功能
-1. 实现base64url编码/解码工具
-2. 实现JWS签名验证（基于cryptography）
-3. 实现JWK到cryptography公钥转换
-4. 实现公钥管理器（文件存储）
-5. 实现JWK获取器
-6. 实现AgentCard验证器
+1. 实现公钥管理器（文件存储）
+2. 实现JWK获取器
+3. 实现AgentCard验证器
+4. 集成python-jose签名验证
 
 ### Phase 2: API接口
 1. 实现公钥管理API
 2. 集成到现有Agent注册接口
 
-### Phase 3: 优化和测试kt
+### Phase 3: 优化和测试
 1. 性能优化
 2. 完整测试覆盖
 3. 文档完善
@@ -919,12 +779,12 @@ class AgentCardValidator:
 
 ## 16. 总结
 
-本设计方案基于JWS (JSON Web Signature)标准，使用cryptography库实现AgentCard的验签功能，主要特点：
+本设计方案基于JWS (JSON Web Signature)标准，使用python-jose库实现AgentCard的验签功能，主要特点：
 
 1. **灵活的验签策略**：支持配置公钥和临时公钥双重验签
 2. **密钥轮转支持**：支持多签名字段，平滑密钥轮转
 3. **安全优先**：默认强制验签，支持动态公钥获取
-4. **自主实现**：基于cryptography库自主实现JWS验证
+4. **易于集成**：使用python-jose简化签名验证
 5. **可扩展性**：支持多种签名算法和公钥来源
 6. **文件存储**：基于文件系统的公钥管理
 7. **Agent隔离**：通过organization和agent-name实现Agent级别的公钥隔离
