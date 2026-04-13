@@ -4,10 +4,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from loguru import logger
 
-from a2a.utils.signing import create_signature_verifier
-
-from jose import jwk, jws
-from jose.exceptions import JWSError, JWKError
+from a2a.types import AgentCard
+from a2a.utils.signing import create_signature_verifier, InvalidSignaturesError, NoSignatureError
 
 from agent_registry.signature.models import (
     SignatureObject, ProtectedHeader, JWK, JWKS
@@ -55,6 +53,8 @@ class AgentCardValidator:
             ValidationResult: 验证结果
         """
         try:
+            # 根据请求信息初始化agent_card变量
+            agent_card = AgentCard(**agent_card_data)
             # 步骤1：提取signatures字段
             signatures = self._extract_signatures(agent_card_data)
             if not signatures:
@@ -73,7 +73,7 @@ class AgentCardValidator:
             del agent_card_copy["signatures"]
             payload = json.dumps(agent_card_copy, sort_keys=True)
             
-            # 步骤3：遍历signatures数组
+            # 步骤3：遍历signatures数组(多个signature验签的情况下成功一个即视为验证通过)
             for sig_obj in signatures:
                 # 解码protected头
                 protected_header = self._decode_protected(sig_obj.protected)
@@ -97,24 +97,17 @@ class AgentCardValidator:
                         logger.info(f"Signature validation passed with backend key: {kid}")
                         return ValidationResult(is_valid=True)
                 
-                # 步骤5：从jku获取临时公钥
-                if hasattr(protected_header, 'jku') and protected_header.jku:
-                    logger.info(f"Trying temporary key from jku: {protected_header.jku}")
-                    temporary_key = self._try_temporary_key(
-                        protected_header.jku,
-                        kid
-                    )
-                    if temporary_key:
-                        logger.info(f"Using temporary key for kid: {kid}")
-                        # 使用临时公钥验签
-                        if self._verify_with_jose(
-                            sig_obj.protected,
-                            payload,
-                            sig_obj.signature,
-                            temporary_key
-                        ):
-                            logger.info(f"Signature validation passed with temporary key: {kid}")
-                            return ValidationResult(is_valid=True)
+            # 步骤5：若后台验签失败则通过jku签名链接重试一次，直接调用a2a-sdk的能力
+            logger.info(f"Trying jku key signature.")
+            a2a_sdk_verifier = create_signature_verifier(self._try_jku_key, ['ES256', 'RS256'])
+            try:
+                a2a_sdk_verifier(agent_card)
+                logger.info(f"Signature validation passed with jku key.")
+                return ValidationResult(is_valid=True)
+            except NoSignatureError:
+                logger.error("No jku key found.")
+            except InvalidSignaturesError:
+                logger.error("Jku key signature validations failed")
             
             # 所有签名都验证失败
             logger.error("All signature validations failed")
@@ -200,7 +193,7 @@ class AgentCardValidator:
             logger.error(f"Failed to get backend key: {e}")
             return None
     
-    def _try_temporary_key(
+    def _try_jku_key(
         self,
         jku: str,
         kid: str
@@ -215,16 +208,16 @@ class AgentCardValidator:
             if jwks:
                 jwk = fetcher.find_key_by_id(jwks, kid)
                 if jwk:
-                    logger.info(f"Found temporary key for kid: {kid}")
+                    logger.info(f"Found jku key for kid: {kid}")
                     return jwk
                 else:
-                    logger.info(f"Temporary key not found in JWKS for kid: {kid}")
+                    logger.info(f"Jku key not found in JWKS for kid: {kid}")
                     return None
             else:
                 logger.warning(f"No keys found in JWKS")
                 return None
         except Exception as e:
-            logger.error(f"Failed to get temporary key: {e}")
+            logger.error(f"Failed to get jku key: {e}")
             return None
     
     def _verify_with_jose(
