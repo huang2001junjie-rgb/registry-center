@@ -26,5 +26,9 @@ FLOW_CTL_PARALLEL_RETRIEVE = "flowcontrol.parallelism.retrieve"
 
 FLOW_CTL_DEREGISTER = "flowcontrol.ratelimit.deregister"
 FLOW_CTL_PARALLEL_DEREGISTER = "flowcontrol.parallelism.deregister"
+
+FLOW_CTL_JWK = "flowcontrol.ratelimit.jwk"
+FLOW_CTL_PARALLEL_JWK = "flowcontrol.parallelism.jwk"
+
 AGENT_NUM_MAX = "agent.num.max"
 FORWARDED_ALLOW_IPS = "forwarded_allow_ips"

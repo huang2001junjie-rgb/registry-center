@@ -25,6 +25,7 @@ from agent_registry.config import (
     MAX_URL_LENGTH, CONN_TIMEOUT, CONN_MAX, FLOW_CTL_PARALLEL_REGISTER, FLOW_CTL_PARALLEL_QUERY, FLOW_CTL_REGISTER,
     FLOW_CTL_QUERY, AGENT_NUM_MAX, FLOW_CTL_PARALLEL_UPDATE, FLOW_CTL_PARALLEL_GET, FLOW_CTL_PARALLEL_RETRIEVE,
     FLOW_CTL_PARALLEL_DEREGISTER, FLOW_CTL_UPDATE, FLOW_CTL_GET, FLOW_CTL_RETRIEVE, FLOW_CTL_DEREGISTER,
+    FLOW_CTL_JWK, FLOW_CTL_PARALLEL_JWK,
 )
 from agent_registry.core import RegistryCore
 from agent_registry.registry_instance import get_registry
@@ -58,6 +59,7 @@ def parse_rate_limit(interface_name: str):
         "get": (FLOW_CTL_GET, 100),
         "retrieve": (FLOW_CTL_RETRIEVE, 100),
         "deregister": (FLOW_CTL_DEREGISTER, 50),
+        "jwk": (FLOW_CTL_JWK, 10),
     }
 
     # Get the corresponding config entry
@@ -143,6 +145,7 @@ update_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_UPDATE, 100)
 get_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_GET, 100)))
 retrieve_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_RETRIEVE, 100)))
 deregister_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_DEREGISTER, 50)))
+jwk_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_JWK, 1)))
 
 
 # ---------- Middleware ----------
