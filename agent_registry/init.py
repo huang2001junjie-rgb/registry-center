@@ -16,13 +16,23 @@ class InitCommand:
         self.config_file = os.path.join(self.root_path, "etc", "conf", "server.conf")
 
     def init_command(self):
-        print("配置服务端TLS证书：（仅支持RSA算法）")
-        tls_config = self.config_tls_cert()
+        config = {}
+
+        enable_https_input = input("是否开启HTTPS enable_https (y/n, 默认: y): ").strip()
+        config['enable_https'] = 'true' if enable_https_input.lower() != 'n' else 'false'
+
+        if config['enable_https'] == 'true':
+            print("\n配置服务端TLS证书：（仅支持RSA算法）")
+            tls_config = self.config_tls_cert()
+            config.update(tls_config)
 
         print("\n配置签名证书：（仅支持RSA算法）")
         sign_config = self.config_sign_cert()
+        config.update(sign_config)
 
-        config = {**tls_config, **sign_config}
+        signature_validation_input = input("是否开启验签能力 signature_validation_enabled (y/n, 默认: y): ").strip()
+        config['signature_validation_enabled'] = 'true' if signature_validation_input.lower() != 'n' else 'false'
+
         self.save_config_to_file(config)
 
         print(f"\n配置已完成，已保存在 {self.config_file}")
@@ -185,18 +195,20 @@ class InitCommand:
         config_dir = os.path.dirname(self.config_file)
         os.makedirs(config_dir, exist_ok=True)
 
+        existing_config = {}
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and '=' in line:
+                        key, _, value = line.partition('=')
+                        existing_config[key.strip()] = value.strip()
+
+        existing_config.update(config)
+
         with open(self.config_file, 'w') as f:
-            f.write("[ssl]\n")
-            f.write(f"ssl_certfile={config.get('ssl_certfile', '')}\n")
-            f.write(f"ssl_keyfile={config.get('ssl_keyfile', '')}\n")
-            f.write(f"ssl_keyfile_password={config.get('ssl_keyfile_password', '')}\n")
-            f.write(f"ssl_ca_certs={config.get('ssl_ca_certs', '')}\n")
-            f.write(f"ssl_cert_certs={config.get('ssl_cert_certs', '')}\n")
-            f.write(f"ssl_verify_client={config.get('ssl_verify_client', 'true')}\n")
-            f.write("\n[sign]\n")
-            f.write(f"sign_certfile={config.get('sign_certfile', '')}\n")
-            f.write(f"sign_keyfile={config.get('sign_keyfile', '')}\n")
-            f.write(f"sign_keyfile_password={config.get('sign_keyfile_password', '')}\n")
+            for key, value in existing_config.items():
+                f.write(f"{key}={value}\n")
 
         os.chmod(self.config_file, 0o600)
 
