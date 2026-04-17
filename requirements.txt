@@ -24,4 +24,4 @@ openai>=2.26.0
 pymilvus~=2.4.9
 sentence_transformers~=3.0.1
 environs~=15.0.1
-pyjwt~=2.12.1
+pyjwt>=2.12.1
