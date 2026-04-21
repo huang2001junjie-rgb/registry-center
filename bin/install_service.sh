@@ -119,7 +119,7 @@ install_service() {
     $PYTHON_PATH --version
     
     if [ "$INSTALL_DIR" != "$ROOT_DIR" ]; then
-        echo "Copying files to $INSTALL_DIR..."
+        echo "Install the project to $INSTALL_DIR..."
         mkdir -p "$INSTALL_DIR"
         cp -r "$ROOT_DIR"/* "$INSTALL_DIR/"
     fi
