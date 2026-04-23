@@ -60,7 +60,7 @@ class LLMConfig:
 
 
 def get_llm_config() -> dict[str, LLMConfig]:
-    config: dict[str, dict] = read_config_as_json("../../../config/llm_config.json")
+    config: dict[str, dict] = read_config_as_json("../../config/llm_config.json")
     llm_config_items = {}
     for key, config_item in config.items():
         llm_config_items[key] = LLMConfig(key, config_item)
