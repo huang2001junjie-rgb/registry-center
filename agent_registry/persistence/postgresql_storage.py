@@ -124,6 +124,8 @@ class PostgreSQLStorage(StorageBackend):
                 )
                 conn.commit()
             result = self.find_by_key(agent.name, agent.provider.organization)
+            if result:
+                logger.info(f"Created agent in PostgreSQL: {agent.name} (org={agent.provider.organization})")
             return result is not None
         finally:
             self.pool.putconn(conn)
@@ -153,7 +155,9 @@ class PostgreSQLStorage(StorageBackend):
                     (f"%{name}%",)
                 )
                 rows = cur.fetchall()
-            return [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            result = [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            logger.debug(f"Found {len(result)} agents by name '{name}' in PostgreSQL")
+            return result
         finally:
             self.pool.putconn(conn)
 
@@ -166,7 +170,9 @@ class PostgreSQLStorage(StorageBackend):
                     (organization,)
                 )
                 rows = cur.fetchall()
-            return [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            result = [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            logger.debug(f"Found {len(result)} agents by organization '{organization}' in PostgreSQL")
+            return result
         finally:
             self.pool.putconn(conn)
 
@@ -176,7 +182,9 @@ class PostgreSQLStorage(StorageBackend):
             with conn.cursor() as cur:
                 cur.execute(PostgreSQLQueries.FIND_ALL.value)
                 rows = cur.fetchall()
-            return [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            result = [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            logger.debug(f"Found {len(result)} agents in PostgreSQL (find_all)")
+            return result
         finally:
             self.pool.putconn(conn)
 
@@ -198,6 +206,7 @@ class PostgreSQLStorage(StorageBackend):
                 )
                 conn.commit()
                 affected = cur.rowcount
+            logger.info(f"Updated agent in PostgreSQL: {name} (org={organization}), affected={affected}")
             return affected > 0
         finally:
             self.pool.putconn(conn)
@@ -212,6 +221,7 @@ class PostgreSQLStorage(StorageBackend):
                 )
                 conn.commit()
                 affected = cur.rowcount
+            logger.info(f"Deleted agent from PostgreSQL: {name} (org={organization}), affected={affected}")
             return affected > 0
         finally:
             self.pool.putconn(conn)

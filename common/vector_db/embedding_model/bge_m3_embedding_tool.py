@@ -21,17 +21,17 @@ from common.vector_db.embedding_model.config.embedding_tool_registry import embe
 
 @embedding_tool_register(EmbeddingType.BGEM3)
 class BgeM3EmbeddingTool(EmbeddingTool):
-    def __init__(self,config:dict):
+    def __init__(self, config: dict):
         super().__init__(config)
-        self.embeeding_uri = config["uri"]
+        self.embedding_uri = config["uri"]
 
-    def get_embedding_vector(self,context:str):
+    def get_embedding_vector(self, context: str) -> list:
         data = {
-            "input":[context],
-            "model":"bge-m3",
-            "encoding_format":"float"
+            "input": [context],
+            "model": "bge-m3",
+            "encoding_format": "float"
         }
-        responses = requests.post(self.embeeding_uri,json=data)
+        responses = requests.post(self.embedding_uri, json=data)
         if responses.status_code == 200:
             response = responses.json()
             return response["data"][0]["embedding"]
