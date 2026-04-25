@@ -7,9 +7,9 @@ from agent_registry.signature.public_key_manager import PublicKeyManager
 
 
 class JWKFetcher:
-    """JWK获取器"""
-    
-    REQUEST_TIMEOUT = 10  # 10秒超时
+    """JWK fetcher"""
+
+    REQUEST_TIMEOUT = 10  # 10 second timeout
     
     def __init__(self, public_key_manager: Optional[PublicKeyManager] = None):
         self.session = requests.Session()
@@ -18,13 +18,13 @@ class JWKFetcher:
     
     def fetch_jwks(self, jku: str) -> Optional[JWKS]:
         """
-        从URL获取JWKS
-        
+        Fetch JWKS from a URL.
+
         Args:
-            jku: JWK Set URL
-        
+            jku: JWK Set URL.
+
         Returns:
-            Optional[JWKS]: JWKS对象，失败返回None
+            Optional[JWKS]: JWKS object, None on failure.
         """
         try:
             logger.info(f"Fetching JWKS from: {jku}")
@@ -53,14 +53,14 @@ class JWKFetcher:
     
     def find_key_by_id(self, jwks: JWKS, kid: str) -> Optional[JWK]:
         """
-        根据kid从JWKS中查找公钥
-        
+        Find a public key from JWKS by kid.
+
         Args:
-            jwks: JWKS对象
-            kid: 密钥ID
-        
+            jwks: JWKS object.
+            kid: Key ID.
+
         Returns:
-            Optional[JWK]: JWK对象，不存在返回None
+            Optional[JWK]: JWK object, None if not found.
         """
         try:
             for key in jwks.keys:
@@ -82,16 +82,16 @@ class JWKFetcher:
         provider_url: Optional[str] = None
     ) -> Optional[PyJWK]:
         """
-        从后台获取公钥
-        
+        Fetch a public key from the backend.
+
         Args:
-            kid: 密钥ID
-            organization: 组织名称（可选）
-            agent_name: Agent名称
-            provider_url: Provider URL（可选，仅当organization为None时使用）
-        
+            kid: Key ID.
+            organization: Organization name (optional).
+            agent_name: Agent name.
+            provider_url: Provider URL (optional, used when organization is None).
+
         Returns:
-            Optional[PyJWK]: PyJWK对象，不存在返回None
+            Optional[PyJWK]: PyJWK object, None if not found.
         """
         try:
             if not self.public_key_manager:
@@ -116,15 +116,15 @@ class JWKFetcher:
         provider_url: Optional[str] = None
     ) -> Callable[[str, str], Optional[PyJWK]]:
         """
-        创建后台公钥获取函数（闭包）
-        
+        Create a backend public key fetch function (closure).
+
         Args:
-            organization: 组织名称（可选）
-            agent_name: Agent名称
-            provider_url: Provider URL（可选，仅当organization为None时使用）
-        
+            organization: Organization name (optional).
+            agent_name: Agent name.
+            provider_url: Provider URL (optional, used when organization is None).
+
         Returns:
-            Callable: 接收(jku, kid)参数，返回PyJWK对象
+            Callable: A function accepting (kid, jku) that returns a PyJWK object.
         """
         def fetch_backend_key(kid: str, jku: str) -> Optional[PyJWK]:
             return self.fetch_from_backend(kid, organization, agent_name, provider_url)
@@ -133,14 +133,14 @@ class JWKFetcher:
     
     def fetch_jku_key(self, kid: str, jku: str) -> Optional[PyJWK]:
         """
-        从jku获取公钥
-        
+        Fetch a public key from a jku URL.
+
         Args:
-            kid: 密钥ID
-            jku: JWK Set URL
-        
+            kid: Key ID.
+            jku: JWK Set URL.
+
         Returns:
-            Optional[JWK]: JWK对象，不存在返回None
+            Optional[PyJWK]: JWK object, None if not found.
         """
         jwks = self.fetch_jwks(jku)
         if jwks:
@@ -151,13 +151,13 @@ class JWKFetcher:
     
     def _convert_to_pyjwk(self, jwk: JWK):
         """
-        将自定义JWK对象转换为jwt.api_jwk.PyJWK对象
-        
+        Convert custom JWK object to jwt.api_jwk.PyJWK object.
+
         Args:
-            jwk: 自定义JWK对象
-        
+            jwk: Custom JWK object.
+
         Returns:
-            jwt.api_jwk.PyJWK对象
+            jwt.api_jwk.PyJWK object.
         """
         try:
             pyjwk_dict = {

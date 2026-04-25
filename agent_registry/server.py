@@ -210,7 +210,7 @@ async def security_middleware(request: Request, call_next):
 
 # ---------- Routes ----------
 async def _check_agent_limit(registry: RegistryCore, client_ip: str, details: dict) -> None:
-    """检查注册数量是否超过上限，若超过则记录审计日志并抛出异常。"""
+    """Check if registration count exceeds the limit, log and raise an exception if so."""
     if len(registry.get_agents()) >= int(config.get(AGENT_NUM_MAX, 40)):
         details["message"] = "Agent registration limit exceeded."
         await audit_handle.handle({
@@ -229,7 +229,7 @@ async def _check_agent_limit(registry: RegistryCore, client_ip: str, details: di
 
 async def _check_duplicate_agent(agent: AgentCard, registry: RegistryCore, client_ip: str,
                                  details: dict) -> None:
-    """检查是否已存在相同 (name, organization) 的 agent，若存在则记录并抛出异常。"""
+    """Check if an agent with same (name, organization) already exists, log and raise if found."""
     key = _make_agent_key(agent.name, agent.provider.organization)
     if key in registry.get_agents():
         details["message"] = "Registration skipped: duplicate agent."
@@ -252,7 +252,7 @@ async def _perform_registration(
         client_ip: str,
         details: dict,
 ) -> bool:
-    """执行实际的注册操作，处理可能的 ValueError 和其他异常，并记录对应日志。"""
+    """Execute the actual registration, handle ValueError and other exceptions, log accordingly."""
     try:
         save_handle = HandlerRegistry.get_handler(InterfaceType.INSERT)
         success = await save_handle.handle(agent)
@@ -301,7 +301,7 @@ async def _perform_update(
         data: dict,
         details: dict
 ) -> bool:
-    """执行实际的更新操作，处理可能的 ValueError 和其他异常，并记录对应日志。"""
+    """Execute the actual update, handle ValueError and other exceptions, log accordingly."""
     try:
         update_handle = HandlerRegistry.get_handler(InterfaceType.UPDATE)
         success = await update_handle.handle(name, organization, data)
@@ -329,7 +329,7 @@ async def _perform_update(
         ) from e
     except Exception as e:
         await audit_handle.handle({
-            "operation_name": OperationName.REGISTER_AGENT,
+            "operation_name": OperationName.UPDATE_AGENT,
             "level": LogLevel.MINOR,
             "result": OperationResult.FAILURE,
             "object_name": OperatorObject.AGENT,
@@ -363,6 +363,7 @@ async def register_agent(
     body = await request.body()
     agent = Parse(body, AgentCard())
     client_ip = request.client.host
+    logger.info(f"Register agent request: name={agent.name}, org={agent.provider.organization}, client={client_ip}")
     details = {
         "agentName": agent.name,
         "organization": agent.provider.organization,
@@ -378,6 +379,7 @@ async def register_agent(
         await _check_duplicate_agent(agent, registry, client_ip, details)
         validate_agent_card(agent)
         result = await _perform_registration(agent, client_ip, details)
+        logger.info(f"Register agent success: name={agent.name}, org={agent.provider.organization}")
         return JSONResponse(
             content=result,
             status_code=status.HTTP_201_CREATED,
@@ -405,6 +407,7 @@ async def list_agents_exact(
     All parameters are optional. If none provided, returns all agents.
     """
     client_ip = request.client.host
+    logger.info(f"Query agents request: name={name}, org={organization}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
     acquired = False
@@ -414,7 +417,9 @@ async def list_agents_exact(
         try:
             query_handle = HandlerRegistry.get_handler(InterfaceType.QUERY)
             agents = await query_handle.handle(name, organization)
-            return [MessageToDict(card, preserving_proto_field_name=True) for card in agents]
+            result = [MessageToDict(card, preserving_proto_field_name=True) for card in agents]
+            logger.info(f"Query agents result: {len(result)} agents found")
+            return result
         except Exception as e:
             logger.error(f"Error in exact search: {e}")
             raise HTTPException(
@@ -443,6 +448,7 @@ async def update_agent(
     body = await request.body()
     agent_data = Parse(body, AgentCard())
     client_ip = request.client.host
+    logger.info(f"Update agent request: name={name}, org={organization}, client={client_ip}")
     details = {
         "agentName": agent_data.name,
         "organization": agent_data.provider.organization,
@@ -462,6 +468,7 @@ async def update_agent(
         success = await _perform_update(client_ip, name, organization, data, details)
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+        logger.info(f"Update agent success: name={name}, org={organization}")
         return success
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -485,6 +492,7 @@ async def deregister_agent(
     Returns True if deleted, False if not found.
     """
     client_ip = request.client.host
+    logger.info(f"Deregister agent request: name={name}, org={organization}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
     acquired = False
@@ -516,9 +524,10 @@ async def deregister_agent(
                 "details": details,
                 "client_ip": client_ip
             })
+            logger.info(f"Deregister agent success: name={name}, org={organization}")
             return success
         except Exception as e:
-            logger.error(f"Error in exact search: {e}")
+            logger.error(f"Error in deregister: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal server error",
@@ -541,10 +550,8 @@ async def retrieve_agents_by_task(
     """
     Find agents that are semantically relevant to the given task using LLM.
     """
-    """
-    Search a single agent by its unique key(name and organization).
-    """
     client_ip = request.client.host
+    logger.info(f"Retrieve agents request: task='{task}', top_n={top_n}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
     acquired = False
@@ -554,9 +561,11 @@ async def retrieve_agents_by_task(
         try:
             retrieve_handle = HandlerRegistry.get_handler(InterfaceType.RETRIEVE)
             agents = await retrieve_handle.handle(task, top_n)
-            return [MessageToDict(agent) for agent in agents]
+            result = [MessageToDict(agent) for agent in agents]
+            logger.info(f"Retrieve agents result: {len(result)} agents found for task='{task}'")
+            return result
         except Exception as e:
-            logger.error(f"Error in exact search: {e}")
+            logger.error(f"Error in retrieve: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal server error",
@@ -578,6 +587,7 @@ async def get_agent(
     Search a single agent by its unique key(name and organization).
     """
     client_ip = request.client.host
+    logger.info(f"Get agent request: name={name}, org={organization}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
     acquired = False
@@ -587,9 +597,11 @@ async def get_agent(
         try:
             get_handle = HandlerRegistry.get_handler(InterfaceType.GET)
             agent = await get_handle.handle(name, organization)
-            return MessageToDict(agent, preserving_proto_field_name=True) if agent is not None else None
+            result = MessageToDict(agent, preserving_proto_field_name=True) if agent is not None else None
+            logger.info(f"Get agent result: {'found' if result else 'not found'} for name={name}, org={organization}")
+            return result
         except Exception as e:
-            logger.error(f"Error in exact search: {e}")
+            logger.error(f"Error in get agent: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal server error",

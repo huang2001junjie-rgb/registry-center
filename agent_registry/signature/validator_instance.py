@@ -4,7 +4,7 @@ from agent_registry.signature.public_key_manager import PublicKeyManager
 
 
 def get_agent_card_validator() -> AgentCardSignatureValidator:
-    """获取AgentCard验证器单例"""
+    """Get AgentCard validator singleton"""
     from functools import lru_cache
     
     @lru_cache(maxsize=1)

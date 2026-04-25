@@ -33,7 +33,7 @@ def load_conf_as_dict(conf_file: str) -> dict:
     config = configparser.ConfigParser()
     try:
         with open(conf_file, 'r', encoding='utf-8') as f:
-            # 读取文件内容
+            # Read file content
             config.read_string('[DEFAULT]\n' + f.read())
             return dict(config['DEFAULT'])
     except Exception as e:
@@ -51,7 +51,7 @@ def load_cert_password(password_path: str) -> bytes:
         return b""
     # read password file and decrypt content
     with open(password_path, 'r', encoding='utf-8') as f:
-        # 文件中可能有换行符
+        # File may contain newline characters
         str_content = f.read().strip()
         return asyncio.run(decrypt_handle.handle(str_content))
 
@@ -60,13 +60,13 @@ def set_ssl_folder_permissions():
     if platform.system().lower() != "linux":
         logger.info(f"current system type is: {platform.system().lower()}")
         return
-    # 设置目录权限为700
+    # Set directory permissions to 700
     os.chmod(SSL_PATH, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-    # 遍历目录中的所有文件，权限设置为600，不会有递归的情况
+    # Traverse all files in the directory, set permissions to 600 (non-recursive)
     for root, _, files in os.walk(SSL_PATH):
         for file_name in files:
             file_path = os.path.join(root, file_name)
-            # 设置文件权限600
+            # Set file permissions to 600
             os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR)
 
 
@@ -107,5 +107,5 @@ def _resolve_env_vars(conf: dict) -> dict:
     return resolved
 
 
-# 单例对象
+# Singleton instance
 conf_singleton_obj = load_conf_obj(CONFIG_FILE_PATH)
