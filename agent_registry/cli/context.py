@@ -4,6 +4,8 @@ CLI Framework Runtime Context
 Stores CLI runtime global state such as debug mode, config path, etc.
 """
 
+from .constants import VALID_OUTPUT_FORMATS, DEFAULT_OUTPUT_FORMAT
+
 
 class Context:
     """
@@ -28,7 +30,7 @@ class Context:
     def __init__(self):
         self.debug: bool = False
         self.config_file: str = None
-        self.output_format: str = 'text'
+        self.output_format: str = DEFAULT_OUTPUT_FORMAT
         self.command_path: str = ''
     
     @classmethod
@@ -45,7 +47,7 @@ class Context:
         ctx = cls()
         ctx.debug = getattr(args, 'debug', False)
         ctx.config_file = getattr(args, 'config_file', None)
-        ctx.output_format = getattr(args, 'output', 'text')
+        ctx.output_format = getattr(args, 'output', DEFAULT_OUTPUT_FORMAT)
         ctx.command_path = getattr(args, 'command_path', '')
         return ctx
     
@@ -74,9 +76,8 @@ class Context:
         Args:
             format: Output format (text/json/table)
         """
-        valid_formats = ['text', 'json', 'table']
-        if format not in valid_formats:
-            raise ValueError(f"Invalid format: {format}. Must be one of {valid_formats}")
+        if format not in VALID_OUTPUT_FORMATS:
+            raise ValueError(f"Invalid format: {format}. Must be one of {VALID_OUTPUT_FORMATS}")
         self.output_format = format
     
     def is_debug(self) -> bool:

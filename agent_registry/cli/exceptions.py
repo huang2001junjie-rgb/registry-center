@@ -14,6 +14,16 @@ Exit Code Convention:
     130 - User interrupt (Ctrl+C)
 """
 
+from .constants import (
+    EXIT_SUCCESS,
+    EXIT_GENERAL_ERROR,
+    EXIT_VALIDATION_ERROR,
+    EXIT_CONFIG_ERROR,
+    EXIT_SERVICE_ERROR,
+    EXIT_PERMISSION_ERROR,
+    EXIT_COMMAND_NOT_FOUND,
+)
+
 
 class CLIError(Exception):
     """
@@ -26,10 +36,10 @@ class CLIError(Exception):
         exit_code: Exit code
         
     Example:
-        raise CLIError("Something went wrong", exit_code=1)
+        raise CLIError("Something went wrong", exit_code=EXIT_GENERAL_ERROR)
     """
     
-    def __init__(self, message: str, exit_code: int = 1):
+    def __init__(self, message: str, exit_code: int = EXIT_GENERAL_ERROR):
         self.message = message
         self.exit_code = exit_code
         super().__init__(message)
@@ -44,13 +54,13 @@ class CommandNotFoundError(CLIError):
     
     Raised when user input command is not registered.
     
-    Exit Code: 127 (shell convention)
+    Exit Code: EXIT_COMMAND_NOT_FOUND (shell convention)
     """
     
     def __init__(self, command: str):
         super().__init__(
             message=f"Command not found: '{command}'",
-            exit_code=127
+            exit_code=EXIT_COMMAND_NOT_FOUND
         )
 
 
@@ -60,11 +70,11 @@ class ValidationError(CLIError):
     
     Raised when command argument validation fails.
     
-    Exit Code: 2
+    Exit Code: EXIT_VALIDATION_ERROR
     """
     
     def __init__(self, message: str):
-        super().__init__(message=message, exit_code=2)
+        super().__init__(message=message, exit_code=EXIT_VALIDATION_ERROR)
 
 
 class ConfigError(CLIError):
@@ -73,11 +83,11 @@ class ConfigError(CLIError):
     
     Raised when config file read, parse, or validation fails.
     
-    Exit Code: 3
+    Exit Code: EXIT_CONFIG_ERROR
     """
     
     def __init__(self, message: str):
-        super().__init__(message=message, exit_code=3)
+        super().__init__(message=message, exit_code=EXIT_CONFIG_ERROR)
 
 
 class ServiceError(CLIError):
@@ -86,11 +96,11 @@ class ServiceError(CLIError):
     
     Raised when service call fails (connection error, service unavailable, etc).
     
-    Exit Code: 4
+    Exit Code: EXIT_SERVICE_ERROR
     """
     
     def __init__(self, message: str):
-        super().__init__(message=message, exit_code=4)
+        super().__init__(message=message, exit_code=EXIT_SERVICE_ERROR)
 
 
 class PermissionError(CLIError):
@@ -99,11 +109,11 @@ class PermissionError(CLIError):
     
     Raised when permission denied (file read/write, operation permission, etc).
     
-    Exit Code: 5
+    Exit Code: EXIT_PERMISSION_ERROR
     """
     
     def __init__(self, message: str):
-        super().__init__(message=message, exit_code=5)
+        super().__init__(message=message, exit_code=EXIT_PERMISSION_ERROR)
 
 
 class ArgumentMissingError(CLIError):
@@ -112,13 +122,13 @@ class ArgumentMissingError(CLIError):
     
     Raised when required argument is missing.
     
-    Exit Code: 2 (validation error category)
+    Exit Code: EXIT_VALIDATION_ERROR (validation error category)
     """
     
     def __init__(self, argument: str):
         super().__init__(
             message=f"Missing required argument: '{argument}'",
-            exit_code=2
+            exit_code=EXIT_VALIDATION_ERROR
         )
 
 
@@ -128,13 +138,13 @@ class SubcommandNotFoundError(CLIError):
     
     Raised when specified subcommand not found in parent command scope.
     
-    Exit Code: 127
+    Exit Code: EXIT_COMMAND_NOT_FOUND
     """
     
     def __init__(self, parent_command: str, subcommand: str):
         super().__init__(
             message=f"Subcommand '{subcommand}' not found under '{parent_command}'",
-            exit_code=127
+            exit_code=EXIT_COMMAND_NOT_FOUND
         )
 
 
@@ -144,12 +154,12 @@ class CommandConflictError(CLIError):
     
     Raised when registering level-1 command with existing name.
     
-    Exit Code: 1
+    Exit Code: EXIT_GENERAL_ERROR
     """
     
     def __init__(self, command: str):
         super().__init__(
             message=f"Command '{command}' already registered. "
                     f"One-level commands must be globally unique.",
-            exit_code=1
+            exit_code=EXIT_GENERAL_ERROR
         )

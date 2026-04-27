@@ -1,8 +1,8 @@
 """
 CLI Framework Logging System
 
-Integrates loguru, provides independent log file (log/cli.log) for CLI framework.
-Separated from service log (server.log), convenient for troubleshooting and command auditing.
+Integrates loguru, provides independent log file for CLI framework.
+Separated from service log, convenient for troubleshooting and command auditing.
 """
 
 import sys
@@ -11,18 +11,26 @@ from pathlib import Path
 from typing import Optional
 from loguru import logger
 
+from .constants import (
+    LOG_FILE,
+    LOG_LEVEL,
+    LOG_ROTATION,
+    LOG_RETENTION,
+    VALID_LOG_LEVELS,
+)
+
 
 class CLILogger:
     """
     CLI-Specific Logging System
     
-    Separated from project base logs, independently writes to log/cli.log
+    Separated from project base logs, independently writes to log file
     
     Features:
-        - Independent log file: log/cli.log
+        - Independent log file
         - Log level control: DEBUG/INFO/WARNING/ERROR
         - Command audit log: Automatically records command execution info
-        - Log rotation: Max 10MB, retention 7 days
+        - Log rotation and retention
         - Debug mode: Output to console
     
     Example:
@@ -43,10 +51,10 @@ class CLILogger:
     
     def __init__(
         self,
-        log_file: str = "log/cli.log",
-        level: str = "INFO",
-        rotation: str = "10 MB",
-        retention: str = "7 days"
+        log_file: str = LOG_FILE,
+        level: str = LOG_LEVEL,
+        rotation: str = LOG_ROTATION,
+        retention: str = LOG_RETENTION
     ):
         """
         Initialize CLI logging system
@@ -248,9 +256,8 @@ class CLILogger:
             Log level priority: DEBUG < INFO < WARNING < ERROR
             After setting to WARNING, debug() and info() logs won't be written to file.
         """
-        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR"]
-        if level.upper() not in valid_levels:
-            raise ValueError(f"Invalid log level: {level}. Must be one of {valid_levels}")
+        if level.upper() not in VALID_LOG_LEVELS:
+            raise ValueError(f"Invalid log level: {level}. Must be one of {VALID_LOG_LEVELS}")
         
         self.level = level.upper()
         

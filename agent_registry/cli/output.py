@@ -8,6 +8,8 @@ import json
 import sys
 from typing import Any, List, Dict, Optional
 
+from .constants import VALID_OUTPUT_FORMATS, DEFAULT_OUTPUT_FORMAT
+
 
 class Output:
     """
@@ -23,16 +25,15 @@ class Output:
         output.error("Failed to execute")
     """
     
-    def __init__(self, format: str = 'text'):
+    def __init__(self, format: str = DEFAULT_OUTPUT_FORMAT):
         """
         Initialize output formatter
         
         Args:
             format: Output format (text/json/table)
         """
-        valid_formats = ['text', 'json', 'table']
-        if format not in valid_formats:
-            raise ValueError(f"Invalid format: {format}. Must be one of {valid_formats}")
+        if format not in VALID_OUTPUT_FORMATS:
+            raise ValueError(f"Invalid format: {format}. Must be one of {VALID_OUTPUT_FORMATS}")
         self.format = format
     
     def print(self, data: Any, title: Optional[str] = None):
@@ -162,9 +163,8 @@ class Output:
         Args:
             format: Output format
         """
-        valid_formats = ['text', 'json', 'table']
-        if format not in valid_formats:
-            raise ValueError(f"Invalid format: {format}. Must be one of {valid_formats}")
+        if format not in VALID_OUTPUT_FORMATS:
+            raise ValueError(f"Invalid format: {format}. Must be one of {VALID_OUTPUT_FORMATS}")
         self.format = format
     
     def get_format(self) -> str:

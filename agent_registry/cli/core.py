@@ -25,6 +25,14 @@ from .exceptions import CLIError, ValidationError
 from .context import Context
 from .logger import cli_logger
 from .i18n import t, tf
+from .constants import (
+    CLI_VERSION,
+    HISTORY_FILE,
+    CMD_DISPLAY_WIDTH,
+    SUBCMD_DISPLAY_WIDTH,
+    COMPLETION_COL_WIDTH,
+    TERMINAL_WIDTH,
+)
 
 
 class InteractiveCLI(cmd.Cmd):
@@ -37,7 +45,7 @@ class InteractiveCLI(cmd.Cmd):
         - Cross-platform support (Windows/Linux/Mac)
     """
     
-    intro = tf('cli.intro', version='1.0.0')
+    intro = tf('cli.intro', version=CLI_VERSION)
     prompt = t('cli.prompt')
     
     def __init__(self, registry: CommandRegistry):
@@ -51,7 +59,7 @@ class InteractiveCLI(cmd.Cmd):
             readline.parse_and_bind("tab: complete")
             readline.set_completer_delims(' \t\n')
             try:
-                readline.read_history_file(".agent_registry_history")
+                readline.read_history_file(HISTORY_FILE)
             except FileNotFoundError:
                 pass
     
@@ -78,18 +86,14 @@ class InteractiveCLI(cmd.Cmd):
             
             print()
             
-            # Fixed column width for consistent spacing
-            col_width = 15
-            term_width = 80
-            cols = max(1, term_width // col_width)
+            cols = max(1, TERMINAL_WIDTH // COMPLETION_COL_WIDTH)
             
             for i, match in enumerate(sorted(matches)):
                 if (i + 1) % cols == 0 or i == len(matches) - 1:
-                    print(f"{match:<{col_width}}")
+                    print(f"{match:<{COMPLETION_COL_WIDTH}}")
                 else:
-                    print(f"{match:<{col_width}}", end='')
+                    print(f"{match:<{COMPLETION_COL_WIDTH}}", end='')
             
-            # Reprint prompt and current input
             print(self.prompt, end='', flush=True)
             print(readline.get_line_buffer(), end='', flush=True)
         
@@ -99,7 +103,7 @@ class InteractiveCLI(cmd.Cmd):
         """Cleanup after exiting command loop"""
         if HAS_READLINE:
             try:
-                readline.write_history_file(".agent_registry_history")
+                readline.write_history_file(HISTORY_FILE)
             except Exception:
                 pass
     
@@ -223,10 +227,6 @@ class InteractiveCLI(cmd.Cmd):
         """Show all available commands with aligned formatting"""
         print(f"\n{t('commands.header')}")
         
-        # Calculate max width for alignment
-        max_cmd_width = 15
-        max_subcmd_width = 20
-        
         commands_data = []
         
         for name, cmd_class in self._registry.get_all().items():
@@ -244,9 +244,9 @@ class InteractiveCLI(cmd.Cmd):
         for item in commands_data:
             type_, name, help_text = item
             if type_ == 'cmd':
-                print(f"  {name:<{max_cmd_width}}  {help_text}")
+                print(f"  {name:<{CMD_DISPLAY_WIDTH}}  {help_text}")
             else:
-                print(f"    {name:<{max_subcmd_width}}  {help_text}")
+                print(f"    {name:<{SUBCMD_DISPLAY_WIDTH}}  {help_text}")
         
         print(f"\n{t('commands.footer')}\n")
     
