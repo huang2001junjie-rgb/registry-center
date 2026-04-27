@@ -124,9 +124,9 @@ class AOCBaseLLM(BaseLLM):
         headers = self._build_headers()
         body = self._build_request_body(prompt)
 
-        logger.debug(f"{self.__class__.__name__} Request URL: {self.base_url}")
-        logger.debug(f"Headers: {headers}")
-        logger.debug(f"Body: {body}")
+        logger.info(f"{self.__class__.__name__} Request URL: {self.base_url}")
+        logger.info(f"Headers: {headers}")
+        logger.info(f"Body: {body}")
 
         try:
             response = self.client.post(self.base_url, headers=headers, json=body)
