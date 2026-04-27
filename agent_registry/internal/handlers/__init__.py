@@ -13,10 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from agent_registry.internal.handlers.base_handler import BaseHandler
+from agent_registry.internal.handlers.base_handler import BaseUDSHandler
 from agent_registry.internal.handlers.approval_handler import ApprovalHandler
-from agent_registry.internal.handlers.config_handler import ConfigHandler
-from agent_registry.internal.handlers.stats_handler import StatsHandler
-from agent_registry.internal.handlers.query_handler import QueryHandler
 
-__all__ = ['BaseHandler', 'ApprovalHandler', 'ConfigHandler', 'StatsHandler', 'QueryHandler']
+__all__ = ['BaseUDSHandler', 'ApprovalHandler']

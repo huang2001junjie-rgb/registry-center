@@ -18,7 +18,3 @@ from enum import Enum
 
 class Action(str, Enum):
     APPROVAL = "approval"
-    CONFIG = "config"
-    STATS = "stats"
-    QUERY = "query"
-    DEREGISTER = "deregister"

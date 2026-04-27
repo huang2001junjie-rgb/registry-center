@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any
 
 
-class BaseHandler(ABC):
+class BaseUDSHandler(ABC):
     @abstractmethod
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
         pass

@@ -16,11 +16,11 @@
 from typing import Dict, Any
 from loguru import logger
 
-from agent_registry.internal.handlers.base_handler import BaseHandler
+from agent_registry.internal.handlers.base_handler import BaseUDSHandler
 from agent_registry.internal.protocols.response import InternalResponse
 
 
-class ApprovalHandler(BaseHandler):
+class ApprovalHandler(BaseUDSHandler):
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
         agent_name = params.get('agent_name')
         organization = params.get('organization')

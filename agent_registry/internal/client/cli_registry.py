@@ -26,26 +26,18 @@ def main():
     )
     parser.add_argument(
         "action",
-        choices=["approval", "config", "stats", "query"],
+        choices=["approval"],
         help="Action to perform"
     )
     parser.add_argument(
         "--agent-name",
-        help="Agent name (for approval/query)"
+        required=True,
+        help="Agent name"
     )
     parser.add_argument(
         "--organization",
-        help="Organization name (for approval/query)"
-    )
-    parser.add_argument(
-        "--config-key",
-        help="Configuration key (for config)"
-    )
-    parser.add_argument(
-        "--type",
-        default="all",
-        choices=["all", "registered", "published"],
-        help="Stats type (for stats)"
+        required=True,
+        help="Organization name"
     )
     parser.add_argument(
         "--output",
@@ -59,22 +51,7 @@ def main():
     client = RegistryClient()
     
     if args.action == "approval":
-        if not args.agent_name or not args.organization:
-            print("Error: --agent-name and --organization are required for approval")
-            sys.exit(1)
         result = client.approval_agent(args.agent_name, args.organization)
-    
-    elif args.action == "config":
-        if not args.config_key:
-            print("Error: --config-key is required for config")
-            sys.exit(1)
-        result = client.get_config(args.config_key)
-    
-    elif args.action == "stats":
-        result = client.get_stats(args.type)
-    
-    elif args.action == "query":
-        result = client.query_agent(args.agent_name, args.organization)
     
     if args.output == "json":
         print(json.dumps(result, indent=2))
