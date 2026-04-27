@@ -77,7 +77,7 @@ class InitCommand:
         default_approval = self.existing_config.get('agent_approval_enabled', 'false')
         current_approval = default_approval
         approval_input = input(
-            f"是否开启审核功能 agent_approval_enabled (y/n, 默认: {default_approval}): "
+            f"Enable agent approval (y/n, default: {default_approval}): "
         ).strip().lower()
         
         if approval_input == 'n':
@@ -90,22 +90,22 @@ class InitCommand:
                         registered_agents.append(agent)
                 
                 if registered_agents:
-                    print("错误：审核功能已开启，不能直接关闭！")
-                    print(f"原因：存在 {len(registered_agents)} 个'已注册'状态的Agent")
-                    print("建议：")
-                    print("  1. 先通过审核接口发布这些Agent")
-                    print("  2. 或通过注销接口删除这些Agent")
-                    print("  3. 处理完毕后再关闭审核功能")
+                    print("Error: Approval function is enabled, cannot disable directly!")
+                    print(f"Reason: There are {len(registered_agents)} agents in 'registered' status")
+                    print("Suggestions:")
+                    print("  1. Publish these agents via approval interface first")
+                    print("  2. Or delete these agents via deregister interface")
+                    print("  3. Disable approval function after processing")
                     sys.exit(1)
                 else:
                     config['agent_approval_enabled'] = 'false'
-                    print("审核功能已关闭")
+                    print("Approval function disabled")
             else:
                 config['agent_approval_enabled'] = 'false'
-                print("审核功能已关闭")
+                print("Approval function disabled")
         elif approval_input == 'y':
             config['agent_approval_enabled'] = 'true'
-            print("审核功能已开启")
+            print("Approval function enabled")
         else:
             config['agent_approval_enabled'] = default_approval
 
