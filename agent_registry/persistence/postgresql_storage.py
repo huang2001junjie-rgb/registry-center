@@ -15,7 +15,7 @@
 
 import json
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 import psycopg2
 from psycopg2 import pool
@@ -26,6 +26,10 @@ from loguru import logger
 from .base import StorageBackend
 from .sql_queries import PostgreSQLQueries
 
+
+def make_agent_key(name: str, organization: str) -> Tuple[str, str]:
+    """Create a normalized key for indexing."""
+    return name.strip(), organization.strip()
 
 class PostgreSQLStorage(StorageBackend):
     def __init__(self, pool: pool.ThreadedConnectionPool):
@@ -177,7 +181,7 @@ class PostgreSQLStorage(StorageBackend):
         finally:
             self.pool.putconn(conn)
 
-    def find_all(self) -> List[AgentCard]:
+    def find_all(self) -> Dict[Tuple[str, str], AgentCard]:
         conn = self.pool.getconn()
         try:
             with conn.cursor() as cur:
@@ -185,7 +189,11 @@ class PostgreSQLStorage(StorageBackend):
                 rows = cur.fetchall()
             result = [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
             logger.debug(f"Found {len(result)} agents in PostgreSQL (find_all)")
-            return result
+            agents = {}
+            for agent in result:
+                key = make_agent_key(agent.name, agent.provider.organization)
+                agents[key] = agent
+            return agents
         finally:
             self.pool.putconn(conn)
 
