@@ -22,7 +22,6 @@ from .context import Context
 from .output import Output
 from .logger import cli_logger, CLILogger
 from .registry import CommandRegistry, SubcommandResolver
-from .client import RegistryClient, get_client
 from .i18n import I18n, t, tf
 
 
@@ -45,8 +44,6 @@ __all__ = [
     'CLILogger',
     'CommandRegistry',
     'SubcommandResolver',
-    'RegistryClient',
-    'get_client',
     'I18n',
     't',
     'tf',
