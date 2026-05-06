@@ -23,6 +23,7 @@ and persistence using a JSON file.
 """
 
 import asyncio
+import json
 from functools import partial
 from typing import Optional, Tuple, Any
 
@@ -127,10 +128,7 @@ class RateLimiter:
         identifier = request.client.host
         # Check rate limit; if exceeded, raise 429.
         if not await async_hit(self.rate_item, identifier):
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too Many Requests"
-            )
+            raise  CustomHTTPException(status.HTTP_429_TOO_MANY_REQUESTS,"Too Many Requests")
         return True
 
 
@@ -164,6 +162,25 @@ retrieve_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_RETRIEVE, 
 deregister_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_DEREGISTER, 50)))
 jwk_semaphore = anyio.Semaphore(int(config.get(FLOW_CTL_PARALLEL_JWK, 1)))
 
+class CustomHTTPException(HTTPException):
+    def __init__(self, status_code: int, error_message: str):
+        super().__init__(status_code=status_code, detail=error_message)
+        self.error_message = error_message
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "errors": {
+                "error": [
+                    {
+                        "errorMessage": exc.detail
+                    }
+                ]
+            }
+        }
+    )
 
 # ---------- Middleware ----------
 @app.middleware("http")
@@ -222,10 +239,7 @@ async def _check_agent_limit(registry: RegistryCore, client_ip: str, details: di
             "details": details,
             "client_ip": client_ip
         })
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Agent registration limit exceeded.",
-        )
+        raise CustomHTTPException(status.HTTP_409_CONFLICT,"Agent registration limit exceeded.",)
 
 
 async def _check_duplicate_agent(agent: AgentCard, registry: RegistryCore, client_ip: str,
@@ -338,8 +352,7 @@ async def _perform_update(
 
 
 @app.post(
-    "/rest/a2a-t/v1/agents/register",
-    response_model=bool,
+    "/rest/v1/registry-center/agent-cards",
     summary="Register a new agent",
     status_code=status.HTTP_201_CREATED,
 )
@@ -354,53 +367,49 @@ async def register_agent(
     The combination (name, provider.organization) must be unique.
     Returns True if registered, False if duplicate.
     """
-    body = await request.body()
-    agent = Parse(body, AgentCard())
+    body = await request.json()
+    agent_cards = body.get("agent_cards", [])
     client_ip = request.client.host
-    logger.info(f"Register agent request: name={agent.name}, org={agent.provider.organization}, client={client_ip}")
-    details = {
-        "agentName": agent.name,
-        "organization": agent.provider.organization,
-        "url": agent.provider.url,
-    }
+
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
     acquired = False
     try:
         register_semaphore.acquire_nowait()
         acquired = True
-        await _check_agent_limit(registry, client_ip, details)
-        await _check_duplicate_agent(agent, registry, client_ip, details)
-        validate_agent_card(agent)
-        logger.info(f"Register agent success: name={agent.name}, org={agent.provider.organization}")
+        for agent_card in agent_cards:
+            agent = Parse(json.dumps(agent_card), AgentCard())
+            logger.info(
+                f"Register agent request: name={agent.name}, org={agent.provider.organization}, client={client_ip}")
+            details = {
+                "agentName": agent.name,
+                "organization": agent.provider.organization,
+                "url": agent.provider.url,
+            }
+            await _check_agent_limit(registry, client_ip, details)
+            await _check_duplicate_agent(agent, registry, client_ip, details)
+            validate_agent_card(agent)
+            logger.info(f"Register agent success: name={agent.name}, org={agent.provider.organization}")
 
-        approval_enabled = config.get('agent_approval_enabled', 'false')
-        if approval_enabled == 'true':
-            initial_status = 'registered'
-            status_message = "Agent registered, waiting for approval"
-        else:
-            initial_status = 'published'
-            status_message = "Agent registered and published"
+            approval_enabled = config.get('agent_approval_enabled', 'false')
+            if approval_enabled == 'true':
+                initial_status = 'registered'
+                status_message = "Agent registered, waiting for approval"
+            else:
+                initial_status = 'published'
+                status_message = "Agent registered and published"
 
-        result = await _perform_registration(agent, client_ip, details, initial_status=initial_status)
+            result = await _perform_registration(agent, client_ip, details, initial_status=initial_status)
+            await audit_handle.handle({
+                "operation_name": OperationName.REGISTER_AGENT,
+                "level": LogLevel.MINOR,
+                "result": OperationResult.SUCCESS if result else OperationResult.FAILURE,
+                "object_name": OperatorObject.AGENT,
+                "details": details,
+                "client_ip": client_ip
+            })
 
-        await audit_handle.handle({
-            "operation_name": OperationName.REGISTER_AGENT,
-            "level": LogLevel.MINOR,
-            "result": OperationResult.SUCCESS if result else OperationResult.FAILURE,
-            "object_name": OperatorObject.AGENT,
-            "details": details,
-            "client_ip": client_ip
-        })
-
-        return JSONResponse(
-            content={
-                "success": result,
-                "status": initial_status,
-                "message": status_message
-            },
-            status_code=status.HTTP_201_CREATED,
-        )
+        return Response(status_code=status.HTTP_201_CREATED)
     except anyio.WouldBlock as e:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
     finally:
@@ -566,16 +575,17 @@ async def deregister_agent(
             deregister_semaphore.release()
 
 
-@app.get("/rest/a2a-t/v1/agents/retrieve", response_model=None, summary="Fuzzy retrieve by task")
+@app.post("/rest/v1/registry-center/agent-cards/semantic-query", response_model=None, summary="Fuzzy retrieve by task")
 async def retrieve_agents_by_task(
         request: Request,
-        task: str = Query(..., description="Natural language task description"),
         top_n: int = 10,
         _: Any = Depends(RateLimiter('retrieve'))
 ):
     """
     Find agents that are semantically relevant to the given task using LLM.
     """
+    body_json = await request.json()
+    task = body_json.get("task")
     client_ip = request.client.host
     logger.info(f"Retrieve agents request: task='{task}', top_n={top_n}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
