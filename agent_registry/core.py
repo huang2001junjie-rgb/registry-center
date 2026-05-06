@@ -35,6 +35,9 @@ from common.util.config_util import get_root_path
 from common.vector_db.vector_db_client.config.vector_db_client_registry import get_or_create_vectordb_tool_instance
 from common.vector_db.vector_db_client.config.vector_db_config import VectorDBType, get_vectordb_config_by_type
 
+def make_agent_key(name: str, organization: str) -> Tuple[str, str]:
+    """Create a normalized key for indexing."""
+    return name.strip(), organization.strip()
 
 class RegistryCore:
     """
@@ -189,7 +192,12 @@ class RegistryCore:
         if use_vectordb:
             return self.vectordb.get_all_entities({"collection_name": COLLECTION_NAME})
         elif self.persistence_mode == 'postgresql':
-            return self.storage.find_all()
+            agents = self.storage.find_all()
+            result = {}
+            for agent in agents:
+                key = make_agent_key(agent.name, agent.provider.organization)
+                result[key] = agent
+            return result
         else:
             return self._agents
 
