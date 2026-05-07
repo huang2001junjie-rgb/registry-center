@@ -448,6 +448,9 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
 | action | 说明 | 参数 |
 |--------|------|------|
 | `approval` | 审核Agent | agent_name, organization |
+| `get_agent` | 查询单个Agent元数据 | agent_name, organization |
+| `list_agents` | 查询全量Agent元数据 | 无参数 |
+| `add_tags` | 添加Agent标签 | agent_name, organization, tags(数组) |
 | `config` | 配置管理 | config_key, config_value |
 | `stats` | 统计查询 | type |
 | `query` | Agent查询 | agent_name, organization |
@@ -494,29 +497,35 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
 agent_registry/
 ├── internal/                     # 内部交互服务
 │   ├── __init__.py
-│   ├── registry_service.py       # 统一UDS服务端
-│   ├── request_dispatcher.py     # 请求分发器
-│   ├── permission_checker.py     # 权限检查器
+│   ├── registry_center_internal_service.py  # UDS服务端
 │   │
 │   ├── handlers/                 # 操作处理器
 │   │   ├── __init__.py
 │   │   ├── base_handler.py       # Handler基类
 │   │   ├── approval_handler.py   # 审核处理器
-│   │   ├── config_handler.py     # 配置处理器
-│   │   ├── stats_handler.py      # 统计处理器
-│   │   ├── query_handler.py      # 查询处理器
-│   │   └── deregister_handler.py # 注销处理器（后续扩充）
-│   │
-│   ├── client/                   # 客户端
-│   │   ├── __init__.py
-│   │   ├── registry_client.py    # 统一客户端类
-│   │   └── cli_registry.py       # 命令行工具
+│   │   ├── get_agent_handler.py  # 单Agent查询处理器
+│   │   ├── list_agents_handler.py # 全量Agent查询处理器
+│   │   └── add_tags_handler.py   # 添加标签处理器
 │   │
 │   └── protocols/                # 协议定义
 │       ├── __init__.py
 │       ├── request.py            # 请求协议
 │       ├── response.py           # 响应协议
 │       └── actions.py            # action定义
+│
+├── cli/                          # CLI工具
+│   ├── __init__.py
+│   ├── __main__.py               # CLI入口
+│   ├── core.py                   # CLI核心引擎
+│   ├── base.py                   # 命令基类
+│   ├── registry.py               # 命令注册
+│   ├── client.py                 # HTTP客户端
+│   ├── uds_client.py             # UDS客户端（内部服务）
+│   └── commands/                 # 命令实现
+│       ├── __init__.py
+│       ├── agent.py              # Agent管理命令
+│       ├── status.py             # 状态查询命令
+│       └── approval.py           # 审核命令
 ```
 
 **服务端代码结构：**
@@ -810,29 +819,24 @@ srw-rw---- 1 root registry_group 0 Jan 1 12:00 run/registry-center/internal.sock
 agent_registry/
 ├── internal/                     # 内部交互服务
 │   ├── __init__.py
-│   ├── registry_service.py       # 统一UDS服务端
-│   ├── request_dispatcher.py     # 请求分发器
-│   ├── permission_checker.py     # 权限检查器
+│   ├── registry_center_internal_service.py  # UDS服务端
 │   │
 │   ├── handlers/                 # 操作处理器
 │   │   ├── __init__.py
 │   │   ├── base_handler.py       # Handler基类
-│   │   ├── approval_handler.py      # 审核处理器
-│   │   ├── config_handler.py     # 配置处理器
-│   │   ├── stats_handler.py      # 统计处理器
-│   │   ├── query_handler.py      # 查询处理器
-│   │   └── deregister_handler.py # 注销处理器（后续扩充）
-│   │
-│   ├── client/                   # 客户端
-│   │   ├── __init__.py
-│   │   ├── registry_client.py    # 统一客户端类
-│   │   └── cli_registry.py       # 命令行工具
+│   │   ├── approval_handler.py   # 审核处理器
+│   │   ├── get_agent_handler.py  # 单Agent查询处理器
+│   │   ├── list_agents_handler.py # 全量Agent查询处理器
+│   │   └── add_tags_handler.py   # 添加标签处理器
 │   │
 │   └── protocols/                # 协议定义
 │       ├── __init__.py
 │       ├── request.py            # 请求协议
 │       ├── response.py           # 响应协议
 │       └── actions.py            # action定义
+│
+├── cli/                          # CLI工具
+│   ├── uds_client.py             # UDS客户端（内部服务）
 ```
 
 #### 3.1.2 修改文件
@@ -841,14 +845,20 @@ agent_registry/
 agent_registry/
 ├── init.py                   # 新增审核开关配置提示
 ├── server.py                 # 修改注册接口和查询接口逻辑
-├── core.py                   # 新增状态管理方法
+├── core.py                   # 新增状态管理、标签管理方法
 ├── start.py                  # 启动UDS内部交互服务线程
 ├── persistence/
 │   ├── file_storage.py       # 新增双文件存储处理
-│   ├── postgresql_storage.py # 新增status字段处理
-│   └── sql_queries.py        # 新增status字段SQL
+│   ├── postgresql_storage.py # 新增status、tag字段处理
+│   └── sql_queries.py        # 新增status、tag字段SQL
 ├── model/
 │   └── validated_agentcard.py  # 新增status字段验证
+├── internal/
+│   ├── handlers/             # 新增get_agent、list_agents、add_tags处理器
+│   └── protocols/            # 新增action定义
+├── cli/
+│   ├── uds_client.py         # 新增UDS客户端方法
+│   └── commands/agent.py     # 新增CLI命令
 ```
 
 ### 3.2 代码实现要点
@@ -1160,26 +1170,28 @@ persistence.mode=postgresql
 ]
 ```
 
-**存储文件2：`data/agentregistry.json`** - 存放Agent状态映射信息
+**存储文件2：`data/agentregistry.json`** - 存放Agent元数据（status、tag等）
 
 ```json
 [
   {
     "organization": "TestOrg",
     "agent_name": "TestAgent",
-    "status": "registered"
+    "status": "registered",
+    "tag": ["label1", "label2"]
   },
   {
     "organization": "AnotherOrg",
     "agent_name": "AnotherAgent",
-    "status": "published"
+    "status": "published",
+    "tag": []
   }
 ]
 ```
 
 **文件用途说明：**
-- `agentcard.json`：存储完整的AgentCard数据，不包含status字段，保持业界标准格式
-- `agentregistry.json`：存储Agent的组织名、Agent名和状态映射，用于状态管理
+- `agentcard.json`：存储完整的AgentCard数据，不包含status和tag字段，保持业界标准格式
+- `agentregistry.json`：存储Agent的组织名、Agent名、状态和标签等元数据
 - 两个文件通过`(organization, agent_name)`组合进行关联
 
 **FileStorage修改要点：**
@@ -1433,7 +1445,7 @@ def test_approval_uds_interface():
    {"success":true, "status":"registered", "message":"Agent registered, waiting for approval"}
    
    # 步骤3：调用审核接口
-   python -m agent_registry.internal.client.cli_registry approval TestAgent TestOrg
+   python -m agent_registry.cli approval -n TestAgent -o TestOrg
    
    # 预期响应：
    {"success":true, "status":"published", "message":"Agent approval successful"}
@@ -1459,7 +1471,7 @@ def test_approval_uds_interface():
    {"success":true, "status":"published", "message":"Agent registered and published"}
    
    # 步骤3：尝试调用审核接口（应报错）
-   python -m agent_registry.internal.client.cli_registry approval TestAgent TestOrg
+   python -m agent_registry.cli approval -n TestAgent -o TestOrg
    
    # 预期响应：
    {"success":false, "error":"Approval function is disabled"}
@@ -1504,7 +1516,7 @@ def test_approval_uds_interface():
    # 预期：报错，提示先发布已注册Agent
    
    # 步骤3：审核Agent1
-   python -m agent_registry.internal.client.cli_registry approval Agent1 Org
+   python -m agent_registry.cli approval -n Agent1 -o Org
    
    # 预期：status变为"published"
    
@@ -1521,14 +1533,14 @@ def test_approval_uds_interface():
 
 ```bash
 # 测试1：普通用户无法访问内部交互接口
-python -m agent_registry.internal.client.cli_registry approval TestAgent TestOrg
+python -m agent_registry.cli approval -n TestAgent -o TestOrg
 
 # 预期：
 Permission denied: You don't have permission to access registry center
 
 # 测试2：registry_group组成员可以访问
 sudo usermod -aG registry_group $USER
-python -m agent_registry.internal.client.cli_registry approval TestAgent TestOrg
+python -m agent_registry.cli approval -n TestAgent -o TestOrg
 
 # 预期：成功调用审核接口
 ```
@@ -1589,17 +1601,84 @@ python -m agent_registry.init
 # 查询所有"已发布"状态的Agent（HTTP接口只返回已发布Agent）
 curl http://localhost:5000/rest/a2a-t/v1/agents/query
 
-# 查询已注册状态的Agent需要通过UDS内部接口
-python -m agent_registry.internal.client.cli_registry stats registered
+# 查询Agent状态通过HTTP接口（仅返回published状态）
 ```
 
-### 5.3 批量审核
+### 5.3 UDS接口使用
+
+#### 5.3.1 CLI命令
+
+```bash
+# 查询全量Agent元数据
+python -m agent_registry.cli
+agent-registry> agent uds-list
+
+# 查询单个Agent元数据
+agent-registry> agent uds-get -n TestAgent -o TestOrg
+
+# 审核Agent
+agent-registry> agent approval -n TestAgent -o TestOrg
+
+# 添加标签
+agent-registry> agent add-tags -n TestAgent -o TestOrg --tags label1,label2
+```
+
+#### 5.3.2 UDS响应示例
+
+**查询单个Agent：**
+```json
+{
+  "success": true,
+  "message": "Agent retrieved successfully",
+  "data": {
+    "agentcard": {
+      "name": "TestAgent",
+      "provider": {...},
+      "description": "...",
+      ...
+    },
+    "status": "published",
+    "tag": ["label1", "label2"]
+  }
+}
+```
+
+**查询全量Agent：**
+```json
+{
+  "success": true,
+  "message": "Agents retrieved successfully",
+  "data": {
+    "agents": [
+      {
+        "agent_name": "TestAgent",
+        "organization": "TestOrg",
+        "status": "published",
+        "tag": ["label1"],
+        "created_at": "2026-01-01T10:00:00",
+        "updated_at": "2026-01-02T15:30:00"
+      },
+      {
+        "agent_name": "AnotherAgent",
+        "organization": "AnotherOrg",
+        "status": "registered",
+        "tag": [],
+        "created_at": "2026-01-03T08:00:00",
+        "updated_at": "2026-01-03T08:00:00"
+      }
+    ],
+    "count": 2
+  }
+}
+```
+
+### 5.5 批量审核
 
 ```python
 # 批量审核所有"已注册"状态的Agent
-from agent_registry.internal.client.registry_client import RegistryClient
+from agent_registry.cli.uds_client import get_uds_client
 
-client = RegistryClient()
+client = get_uds_client()
 
 # 获取所有"已注册"Agent
 registered_agents = registry.get_agents_by_status('registered')
@@ -1607,10 +1686,10 @@ registered_agents = registry.get_agents_by_status('registered')
 # 批量审核
 for agent in registered_agents:
     result = client.approval_agent(agent.name, agent.provider.organization)
-    print(f"{agent.name}: {result['message']}")
+    print(f"{agent.name}: {result.get('message', 'approved')}")
 ```
 
-### 5.4 监控和日志
+### 5.6 监控和日志
 
 #### 5.4.1 审核日志
 
@@ -1628,20 +1707,6 @@ await approval_handle.handle({
     },
     "user_name": "admin"
 })
-```
-
-#### 5.4.2 审核统计
-
-```bash
-# 统计Agent状态分布（通过UDS内部接口）
-python -m agent_registry.internal.client.cli_registry stats all
-
-# 预期响应：
-{
-  "total": 100,
-  "registered": 20,
-  "published": 80
-}
 ```
 
 ## 6. 总结
@@ -1665,16 +1730,23 @@ python -m agent_registry.internal.client.cli_registry stats all
    - Socket路径：`run/registry-center/internal.sock`（项目目录）
    - 统一入口，通过action字段区分操作类型
    - 请求格式：`{"action": "...", "params": {...}}`
-   - 支持approval、config、stats、query等操作
+   - 支持approval、get_agent、list_agents、add_tags等操作
    - 文件权限实现访问控制（registry_group组）
    - 审核关闭时approval action报错
+   - UDS查询返回(agent_name, organization, status, tag)
 
-4. **持久化存储**
+4. **Agent标签管理**
+   - 新增`tag`字段（数组类型）
+   - 通过UDS接口添加标签（追加、去重）
+   - 文件模式：存储在agentregistry.json
+   - 数据库模式：新增tag字段（JSONB类型）
+
+5. **持久化存储**
    - 支持文件存储和数据库存储两种模式
    - 由`persistence.conf`中的`persistence.mode`配置控制
-   - 文件存储采用双文件方案：agentcard.json（不含status）+ agentregistry.json（状态映射）
-   - 双文件方案保持业界AgentCard数据标准，避免status字段冲突
-   - 数据库存储需新增status列
+   - 文件存储采用双文件方案：agentcard.json（不含status/tag）+ agentregistry.json（元数据）
+   - 双文件方案保持业界AgentCard数据标准，避免status/tag字段冲突
+   - 数据库存储需新增status、tag字段
 
 ### 6.2 安全要点
 
@@ -1696,13 +1768,21 @@ python -m agent_registry.internal.client.cli_registry stats all
 1. **状态扩展**
    - 可扩展更多状态（如：审核中、审核失败等）
 
-2. **审核流程扩展**
+2. **标签扩展**
+   - 标签可扩展更多元数据字段
+   - 支持标签搜索、分类等功能
+
+3. **审核流程扩展**
    - 可增加多级审核
    - 可增加审核日志和审计
 
-3. **接口扩展**
+4. **接口扩展**
    - 可增加批量审核接口
    - 可增加审核历史查询接口
    - Handler模式易于添加新操作类型
 
-该设计文档详细说明了注册中心内部交互服务的实现方案，包括审核开关配置、Agent状态管理、统一UDS内部交互服务设计等，为后续实现提供了完整的设计蓝图。
+5. **CLI扩展**
+   - 可通过UDS接口扩展更多CLI命令
+   - CLI与UDS统一入口，易于维护
+
+该设计文档详细说明了注册中心内部交互服务的实现方案，包括审核开关配置、Agent状态管理、标签管理、统一UDS内部交互服务设计等，为后续实现提供了完整的设计蓝图。
