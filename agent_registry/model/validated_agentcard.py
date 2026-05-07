@@ -15,22 +15,11 @@
 
 import re
 
-from pathlib import Path
 from a2a.types import AgentCard, AgentProvider, AgentSkill, AgentCapabilities, AgentInterface
 from fastapi import HTTPException, status
 from google.protobuf.internal.containers import RepeatedScalarFieldContainer, RepeatedCompositeFieldContainer
 from google.protobuf.json_format import MessageToJson
 from pydantic import HttpUrl
-from llm_guard.input_scanners import PromptInjection
-from llm_guard.model import Model
-
-_LOCAL_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "prompt_injection"
-_prompt_injection_scanner = PromptInjection(
-    model=Model(
-        path=str(_LOCAL_MODEL_PATH),
-        pipeline_kwargs={"max_length": 512, "truncation": True}
-    )
-)
 
 _NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]+(?:\s+[a-zA-Z0-9_]+)*$')
 
@@ -64,11 +53,6 @@ def validate_description(description: str):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f'The agent description can contain a maximum of {DESCRIPTION_MAX_LENGTH} characters.')
-    sanitized_result, is_valid, risk_score = _prompt_injection_scanner.scan(description)
-    if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f'The agent description contains potential prompt injection attempts.')
 
 
 def validate_supported_interfaces(supported_interfaces: RepeatedCompositeFieldContainer[AgentInterface]):
@@ -117,36 +101,6 @@ def validate_skills(skills: RepeatedCompositeFieldContainer[AgentSkill]):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f'Skill JSON length exceeds the maximum allowed length of {SKILL_MAX_LENGTH}')
-
-        if hasattr(skill, 'name') and skill.name:
-            sanitized_result, is_valid, risk_score = _prompt_injection_scanner.scan(skill.name)
-            if not is_valid:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=f'The skill name contains potential prompt injection attempts.')
-
-        if hasattr(skill, 'description') and skill.description:
-            sanitized_result, is_valid, risk_score = _prompt_injection_scanner.scan(skill.description)
-            if not is_valid:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=f'The skill description contains potential prompt injection attempts.')
-
-        if hasattr(skill, 'examples') and skill.examples:
-            for example in skill.examples:
-                sanitized_result, is_valid, risk_score = _prompt_injection_scanner.scan(example)
-                if not is_valid:
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                        detail=f'The skill example contains potential prompt injection attempts.')
-
-        if hasattr(skill, 'tags') and skill.tags:
-            for tag in skill.tags:
-                sanitized_result, is_valid, risk_score = _prompt_injection_scanner.scan(tag)
-                if not is_valid:
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                        detail=f'The skill tag contains potential prompt injection attempts.')
 
 
 def validate_capabilities(capabilities: AgentCapabilities):
