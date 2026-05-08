@@ -22,6 +22,7 @@ class PostgreSQLQueries(str, Enum):
             id              SERIAL PRIMARY KEY,
             name            VARCHAR(100) NOT NULL,
             organization    VARCHAR(100) NOT NULL,
+            owner           VARCHAR(100) NULL,
             description     VARCHAR(1000),
             url             VARCHAR(1024),
             version         VARCHAR(50),
@@ -34,7 +35,7 @@ class PostgreSQLQueries(str, Enum):
             agent_card_json JSONB        NOT NULL,
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(name, organization)
+            UNIQUE(name, organization, owner)
         )
     """
 
@@ -49,16 +50,6 @@ class PostgreSQLQueries(str, Enum):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                            WHERE table_name='agent_card' AND column_name='status') THEN
                 ALTER TABLE agent_card ADD COLUMN status VARCHAR(20) DEFAULT 'published';
-            END IF;
-        END $$;
-    """
-
-    ADD_COLUMN_TAG = """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                           WHERE table_name='agent_card' AND column_name='tag') THEN
-                ALTER TABLE agent_card ADD COLUMN tag JSONB DEFAULT '[]'::jsonb;
             END IF;
         END $$;
     """
@@ -100,16 +91,6 @@ class PostgreSQLQueries(str, Enum):
         WHERE name = %s AND organization = %s
     """
 
-    GET_TAGS = """
-        SELECT tag FROM agent_card
-        WHERE name = %s AND organization = %s
-    """
-
-    UPDATE_TAGS = """
-        UPDATE agent_card SET tag = tag || %s::jsonb, updated_at = %s
-        WHERE name = %s AND organization = %s
-    """
-
     DELETE_AGENT = """
         DELETE FROM agent_card WHERE name = %s AND organization = %s
     """
@@ -119,12 +100,12 @@ class PostgreSQLQueries(str, Enum):
     COUNT_BY_STATUS = "SELECT COUNT(*) FROM agent_card WHERE status = %s"
 
     GET_METADATA = """
-        SELECT name, organization, status, tag FROM agent_card
+        SELECT name, organization, status, tags FROM agent_card
         WHERE name = %s AND organization = %s
     """
 
     GET_ALL_METADATA = """
-        SELECT name, organization, status, tag FROM agent_card
+        SELECT name, organization, status, tags FROM agent_card
     """
 
     GET_CREATED_AT = """
@@ -135,4 +116,87 @@ class PostgreSQLQueries(str, Enum):
     GET_UPDATED_AT = """
         SELECT updated_at FROM agent_card
         WHERE name = %s AND organization = %s
+    """
+
+    ADD_COLUMN_OWNER = """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                           WHERE table_name='agent_card' AND column_name='owner') THEN
+                ALTER TABLE agent_card ADD COLUMN owner VARCHAR(100) NULL;
+            END IF;
+        END $$;
+    """
+
+    CREATE_INDEX_OWNER = "CREATE INDEX IF NOT EXISTS idx_agent_owner ON agent_card(owner)"
+
+    DROP_OLD_UNIQUE_INDEX = """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agent_card_name_organization_key') THEN
+                ALTER TABLE agent_card DROP CONSTRAINT agent_card_name_organization_key;
+            END IF;
+        END $$;
+    """
+
+    CREATE_OWNER_UNIQUE_INDEX = """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_owner_unique ON agent_card(name, organization, owner)
+    """
+
+    CREATE_AGENT_WITH_OWNER = """
+        INSERT INTO agent_card (name, organization, owner, description, url, version, status, provider_json,
+                                capabilities_json, skills_json, default_input_modes, default_output_modes,
+                                agent_card_json, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (name, organization, owner) DO NOTHING
+    """
+
+    FIND_BY_KEY_WITH_OWNER = """
+        SELECT agent_card_json, owner FROM agent_card
+        WHERE name = %s AND organization = %s AND owner = %s
+    """
+
+    FIND_BY_KEY_ANY_OWNER = """
+        SELECT agent_card_json, owner FROM agent_card
+        WHERE name = %s AND organization = %s
+        ORDER BY owner NULLS LAST
+        LIMIT 1
+    """
+
+    FIND_BY_OWNER = """
+        SELECT agent_card_json, owner FROM agent_card WHERE owner = %s
+    """
+
+    UPDATE_AGENT_WITH_OWNER = """
+        UPDATE agent_card SET agent_card_json = %s, updated_at = %s
+        WHERE name = %s AND organization = %s AND (owner = %s OR owner IS NULL)
+    """
+
+    DELETE_AGENT_WITH_OWNER = """
+        DELETE FROM agent_card 
+        WHERE name = %s AND organization = %s AND (owner = %s OR owner IS NULL)
+    """
+
+    ADD_COLUMN_TAGS = """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                           WHERE table_name='agent_card' AND column_name='tags') THEN
+                ALTER TABLE agent_card ADD COLUMN tags JSONB DEFAULT '[]'::jsonb;
+            END IF;
+        END $$;
+    """
+
+    GET_TAGS = """
+        SELECT tags FROM agent_card WHERE name = %s AND organization = %s
+    """
+
+    UPDATE_TAGS = """
+        UPDATE agent_card SET tags = %s, updated_at = %s
+        WHERE name = %s AND organization = %s
+    """
+
+    FIND_BY_TAG = """
+        SELECT agent_card_json FROM agent_card 
+        WHERE tags @> %s::jsonb
     """

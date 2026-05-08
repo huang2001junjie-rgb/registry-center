@@ -15,7 +15,6 @@
 
 import json
 import os
-import platform
 import socket
 import threading
 from typing import Dict, Type, Optional
@@ -25,9 +24,10 @@ from pydantic import ValidationError
 
 from agent_registry.internal.handlers import BaseUDSHandler
 from agent_registry.internal.handlers.approval_handler import ApprovalHandler
-from agent_registry.internal.handlers.get_agent_handler import GetAgentHandler
-from agent_registry.internal.handlers.list_agents_handler import ListAgentsHandler
-from agent_registry.internal.handlers.add_tags_handler import AddTagsHandler
+from agent_registry.internal.handlers.tag_handler import (
+    TagAddHandler, TagRemoveHandler, TagUpdateHandler,
+    TagGetHandler, TagListHandler
+)
 from agent_registry.internal.protocols.actions import Action
 from agent_registry.internal.protocols.request import InternalRequest
 from agent_registry.registry_instance import get_registry
@@ -37,9 +37,11 @@ from common.util.config_util import get_conf
 class RequestDispatcher:
     _handlers: Dict[str, Type[BaseUDSHandler]] = {
         Action.APPROVAL: ApprovalHandler,
-        Action.GET_AGENT: GetAgentHandler,
-        Action.LIST_AGENTS: ListAgentsHandler,
-        Action.ADD_TAGS: AddTagsHandler,
+        Action.ADD_TAG: TagAddHandler,
+        Action.REMOVE_TAG: TagRemoveHandler,
+        Action.UPDATE_TAG: TagUpdateHandler,
+        Action.GET_TAG: TagGetHandler,
+        Action.LIST_TAG: TagListHandler,
     }
 
     def get_handler(self, action: str) -> Optional[BaseUDSHandler]:
@@ -64,68 +66,37 @@ class RegistryCenterInternalService:
         self._running = False
 
     def start(self):
-        if platform.system() == 'Windows':
-            # ========== Windows 使用 TCP ==========
-            host = '127.0.0.1'
-            port = 9305  # 固定端口，确保不与其它服务冲突，仅windows本地调试使用
-            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                server_socket.bind((host, port))
-                server_socket.listen(5)
-                self._running = True
-                logger.info(f"Internal service started on TCP {host}:{port}")
+        self._ensure_socket_dir()
+        try:
+            os.unlink(self.socket_path)
+        except FileNotFoundError:
+            pass
 
-                while self._running:
-                    try:
-                        server_socket.settimeout(1.0)
-                        conn, addr = server_socket.accept()
-                        logger.debug(f"Accepted connection from {addr}")
-                        thread = threading.Thread(target=self._handle_request, args=(conn,))
-                        thread.daemon = True
-                        thread.start()
-                    except socket.timeout:
-                        continue
-                    except Exception as e:
-                        if self._running:
-                            logger.error(f"Error accepting connection: {e}")
-            except Exception as e:
-                logger.error(f"Failed to start TCP service: {e}")
-            finally:
-                server_socket.close()
-        else:
-            # ========== Linux / Unix 使用 UDS ==========
-            self._ensure_socket_dir()
-            try:
-                os.unlink(self.socket_path)
-            except FileNotFoundError:
-                pass
+        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            server_socket.bind(self.socket_path)
+            os.chmod(self.socket_path, 0o660)
+            server_socket.listen(5)
+            self._running = True
+            logger.info(f"Internal service started on UDS socket: {self.socket_path}")
 
-            server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            try:
-                server_socket.bind(self.socket_path)
-                os.chmod(self.socket_path, 0o660)
-                server_socket.listen(5)
-                self._running = True
-                logger.info(f"Internal service started on UDS socket: {self.socket_path}")
-
-                while self._running:
-                    try:
-                        server_socket.settimeout(1.0)
-                        conn, _ = server_socket.accept()
-                        thread = threading.Thread(target=self._handle_request, args=(conn,))
-                        thread.daemon = True
-                        thread.start()
-                    except socket.timeout:
-                        continue
-                    except Exception as e:
-                        if self._running:
-                            logger.error(f"Error accepting connection: {e}")
-            except Exception as e:
-                logger.error(f"Failed to start UDS service: {e}")
-            finally:
-                server_socket.close()
-                self._cleanup_socket()  # 仅在 UDS 模式清理 socket 文件
+            while self._running:
+                try:
+                    server_socket.settimeout(1.0)
+                    conn, _ = server_socket.accept()
+                    thread = threading.Thread(target=self._handle_request, args=(conn,))
+                    thread.daemon = True
+                    thread.start()
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    if self._running:
+                        logger.error(f"Error accepting connection: {e}")
+        except Exception as e:
+            logger.error(f"Failed to start UDS service: {e}")
+        finally:
+            server_socket.close()
+            self._cleanup_socket()
 
     def stop(self):
         self._running = False
@@ -142,37 +113,53 @@ class RegistryCenterInternalService:
             pass
 
     def _handle_request(self, conn):
+        logger.info("[InternalService] Entering _handle_request method")
         try:
             data = conn.recv(4096)
+            logger.info(f"[InternalService] Received data: {len(data)} bytes")
             if not data:
+                logger.warning("[InternalService] No data received, returning")
                 return
 
             raw_request = json.loads(data.decode('utf-8'))
+            logger.info(f"[InternalService] Request action: {raw_request.get('action')}")
+            logger.debug(f"[InternalService] Request params: {raw_request.get('params')}")
+
             try:
                 request = InternalRequest(**raw_request)
+                logger.info(f"[InternalService] Request validated, action={request.action}")
             except ValidationError as e:
-                logger.error(f"Invalid request format: {e}")
+                logger.error(f"[InternalService] Invalid request format: {e}")
                 response = {"success": False, "error": "Invalid request format", "message": str(e)}
                 conn.send(json.dumps(response).encode('utf-8'))
                 return
 
             handler = self.dispatcher.get_handler(request.action)
+            logger.info(f"[InternalService] Handler found: {handler.__class__.__name__ if handler else 'None'}")
+
             if not handler:
+                logger.error(f"[InternalService] Unknown action: {request.action}")
                 response = {
                     "success": False,
                     "error": f"Unknown action: {request.action}"
                 }
             else:
+                logger.info(f"[InternalService] Calling handler.handle()")
                 response = handler.handle(request.params, self.registry, self.config)
+                logger.info(f"[InternalService] Handler returned response: success={response.get('success')}")
 
             conn.send(json.dumps(response).encode('utf-8'))
+            logger.info("[InternalService] Response sent successfully")
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON request: {e}")
+            logger.error(f"[InternalService] Invalid JSON request: {e}")
             response = {"success": False, "error": "Invalid JSON format"}
             conn.send(json.dumps(response).encode('utf-8'))
         except Exception as e:
-            logger.error(f"Error handling request: {e}")
+            logger.error(f"[InternalService] Error handling request: {e}")
+            import traceback
+            logger.error(f"[InternalService] Traceback: {traceback.format_exc()}")
             response = {"success": False, "error": str(e)}
             conn.send(json.dumps(response).encode('utf-8'))
         finally:
             conn.close()
+            logger.info("[InternalService] Connection closed")

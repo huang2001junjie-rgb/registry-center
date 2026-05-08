@@ -27,8 +27,8 @@ class AgentCommand(BaseCommand):
     def subcommands(self) -> Dict[str, BaseCommand]:
         return {
             "approval": ApprovalCommand(),
-            "uds-list": UDSListCommand(),
-            "uds-get": UDSGetCommand(),
+            "list": UDSListCommand(),
+            "get": UDSGetCommand(),
             "add-tags": AddTagsCommand(),
         }
     
@@ -37,11 +37,11 @@ class AgentCommand(BaseCommand):
 
 
 class UDSGetCommand(BaseCommand):
-    """Get single agent metadata via UDS"""
+    """Get single agent metadata"""
 
     @property
     def name(self) -> str:
-        return "uds-get"
+        return "get"
 
     @property
     def help_text(self) -> str:
@@ -101,11 +101,11 @@ class UDSGetCommand(BaseCommand):
 
 
 class UDSListCommand(BaseCommand):
-    """List all agents metadata via UDS"""
+    """List all agents metadata"""
 
     @property
     def name(self) -> str:
-        return "uds-list"
+        return "list"
 
     @property
     def help_text(self) -> str:

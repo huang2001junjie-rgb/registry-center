@@ -42,6 +42,8 @@ class OperationName:
     RETRIEVE_AGENT = "Retrieve Agent"
     GET_AGENT = "Get Agent"
     DEREGISTER_AGENT = "Deregister Agent"
+    APPROVE_AGENT = "Approve Agent"
+    UPDATE_TAGS = "Update Tags"
     GENERATE_CERTIFICATE = "Generate Certificate"
 
 
