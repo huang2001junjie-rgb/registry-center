@@ -5,9 +5,10 @@ Defines the standard interface for CLI commands. All concrete commands must inhe
 """
 
 import sys
+import json
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 
 class BaseCommand(ABC):
@@ -35,6 +36,7 @@ class BaseCommand(ABC):
         help_text: Command help description (must implement)
         aliases: Command aliases (optional)
         subcommands: Subcommands dictionary (optional)
+        display_config: Output display configuration (optional)
     """
     
     @property
@@ -94,6 +96,43 @@ class BaseCommand(ABC):
         
         Returns:
             Dict[str, BaseCommand]: Subcommands dictionary, key is subcommand name, value is command instance
+        """
+        return {}
+    
+    @property
+    def display_config(self) -> Dict:
+        """
+        Output display configuration
+        
+        Defines which fields to display in table format and which to display separately.
+        Used by format_output() to generate structured table output.
+        
+        Structure:
+            {
+                'table_fields': ['field1', 'field2', ...],  # Fields displayed in table row
+                'separate_fields': ['long_field1', ...],     # Fields displayed separately (e.g., JSON)
+                'field_labels': {                            # Optional: custom field labels
+                    'field1': 'Display Name',
+                    'field2': 'Another Name',
+                },
+                'max_width': 50,                             # Optional: max width for separate fields
+            }
+        
+        Example:
+            {
+                'table_fields': ['name', 'organization', 'status', 'tags'],
+                'separate_fields': ['agentcard', 'agent_card_json'],
+                'field_labels': {
+                    'name': 'Agent Name',
+                    'organization': 'Organization',
+                    'status': 'Status',
+                    'tags': 'Tags',
+                    'agentcard': 'AgentCard JSON',
+                }
+            }
+        
+        Returns:
+            Dict: Display configuration
         """
         return {}
     
@@ -193,6 +232,170 @@ class BaseCommand(ABC):
             help_parts.append(f"Subcommands: {subcmd_list}")
         
         return '\n'.join(help_parts)
+    
+    def format_output(self, data: Dict, title: Optional[str] = None) -> str:
+        """
+        Format output data based on display_config
+        
+        Generates table-formatted output with:
+        - Table row for fields in 'table_fields'
+        - Separate sections for fields in 'separate_fields'
+        
+        Args:
+            data: Data dictionary to format
+            title: Optional title for output
+            
+        Returns:
+            str: Formatted output string
+        """
+        config = self.display_config
+        if not config:
+            return self._format_simple(data, title)
+        
+        table_fields = config.get('table_fields', [])
+        separate_fields = config.get('separate_fields', [])
+        field_labels = config.get('field_labels', {})
+        max_width = config.get('max_width', 50)
+        
+        output_lines = []
+        
+        if title:
+            output_lines.append(title)
+            output_lines.append('=' * len(title))
+        
+        if table_fields:
+            output_lines.append('')
+            header_row = []
+            value_row = []
+            for field in table_fields:
+                label = field_labels.get(field, field)
+                value = self._get_field_value(data, field)
+                header_row.append(label)
+                value_row.append(self._truncate_value(str(value), max_width))
+            
+            output_lines.append(self._format_table_row(header_row, 'header'))
+            output_lines.append(self._format_table_row(value_row, 'value'))
+        
+        for field in separate_fields:
+            if field in data or self._nested_field_exists(data, field):
+                label = field_labels.get(field, field)
+                value = self._get_field_value(data, field)
+                output_lines.append('')
+                output_lines.append(f'{label}:')
+                output_lines.append('-' * len(label))
+                if isinstance(value, (dict, list)):
+                    output_lines.append(json.dumps(value, indent=2, ensure_ascii=False))
+                else:
+                    output_lines.append(str(value))
+        
+        return '\n'.join(output_lines)
+    
+    def format_list_output(self, items: List[Dict], title: Optional[str] = None) -> str:
+        """
+        Format list output as table
+        
+        Args:
+            items: List of data items
+            title: Optional title
+            
+        Returns:
+            str: Formatted output string
+        """
+        config = self.display_config
+        table_fields = config.get('table_fields', [])
+        field_labels = config.get('field_labels', {})
+        
+        if not items:
+            return f"{title or 'Results'}: No items found"
+        
+        output_lines = []
+        
+        if title:
+            output_lines.append(title)
+            output_lines.append('=' * len(title))
+        
+        if table_fields:
+            output_lines.append('')
+            header_row = [field_labels.get(f, f) for f in table_fields]
+            output_lines.append(self._format_table_row(header_row, 'header'))
+            
+            for item in items:
+                value_row = []
+                for field in table_fields:
+                    value = self._get_field_value(item, field)
+                    value_row.append(self._truncate_value(str(value), 40))
+                output_lines.append(self._format_table_row(value_row, 'value'))
+        else:
+            for item in items:
+                output_lines.append(self._format_simple(item))
+        
+        return '\n'.join(output_lines)
+    
+    def _format_simple(self, data: Dict, title: Optional[str] = None) -> str:
+        """Simple text format fallback"""
+        lines = []
+        if title:
+            lines.append(title)
+            lines.append('=' * len(title))
+        for k, v in data.items():
+            lines.append(f'{k}: {v}')
+        return '\n'.join(lines)
+    
+    def _format_table_row(self, values: List[str], row_type: str = 'value') -> str:
+        """
+        Format a single table row with fixed-width columns
+        
+        Args:
+            values: List of column values
+            row_type: 'header' or 'value'
+            
+        Returns:
+            str: Formatted row
+        """
+        col_width = 20
+        formatted = [f'{v:<{col_width}}' for v in values]
+        return ' | ' + ' | '.join(formatted) + ' |'
+    
+    def _truncate_value(self, value: str, max_len: int = 40) -> str:
+        """Truncate long values"""
+        if len(value) > max_len:
+            return value[:max_len - 3] + '...'
+        return value
+    
+    def _get_field_value(self, data: Dict, field: str) -> Any:
+        """
+        Get field value from data, supporting nested paths
+        
+        Args:
+            data: Data dictionary
+            field: Field name (supports dot notation like 'agentcard.name')
+            
+        Returns:
+            Any: Field value
+        """
+        if '.' in field:
+            parts = field.split('.')
+            value = data
+            for part in parts:
+                if isinstance(value, dict):
+                    value = value.get(part, '')
+                else:
+                    return ''
+            return value
+        return data.get(field, '')
+    
+    def _nested_field_exists(self, data: Dict, field: str) -> bool:
+        """Check if nested field exists"""
+        if '.' in field:
+            parts = field.split('.')
+            value = data
+            for part in parts:
+                if isinstance(value, dict) and part in value:
+                    value = value[part]
+                else:
+                    return False
+            return True
+        return field in data
     
     def __repr__(self):
         return f"<{self.__class__.__name__}: name='{self.name}'>"
