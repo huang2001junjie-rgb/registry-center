@@ -23,6 +23,7 @@ from agent_registry.internal.utils.tag_validator import TagValidator
 
 class TagAddHandler(BaseUDSHandler):
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
+        logger.info(f"[TagAddHandler] Entering handle method with params: {params}")
         validator = TagValidator()
         
         agent_name = params.get('agent_name')
@@ -82,6 +83,7 @@ class TagAddHandler(BaseUDSHandler):
 
 class TagRemoveHandler(BaseUDSHandler):
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
+        logger.info(f"[TagRemoveHandler] Entering handle method with params: {params}")
         agent_name = params.get('agent_name')
         organization = params.get('organization')
         tags_to_remove = params.get('tags', [])
@@ -131,6 +133,7 @@ class TagRemoveHandler(BaseUDSHandler):
 
 class TagUpdateHandler(BaseUDSHandler):
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
+        logger.info(f"[TagUpdateHandler] Entering handle method with params: {params}")
         validator = TagValidator()
         
         agent_name = params.get('agent_name')
@@ -182,6 +185,7 @@ class TagUpdateHandler(BaseUDSHandler):
 
 class TagGetHandler(BaseUDSHandler):
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
+        logger.info(f"[TagGetHandler] Entering handle method with params: {params}")
         agent_name = params.get('agent_name')
         organization = params.get('organization')
         
@@ -214,6 +218,7 @@ class TagGetHandler(BaseUDSHandler):
 
 class TagListHandler(BaseUDSHandler):
     def handle(self, params: Dict[str, Any], registry, config) -> Dict[str, Any]:
+        logger.info(f"[TagListHandler] Entering handle method with params: {params}")
         tag = params.get('tag')
         
         if not tag:

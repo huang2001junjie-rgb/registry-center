@@ -85,7 +85,7 @@ class PostgreSQLStorage(StorageBackend):
             with conn.cursor() as cur:
                 cur.execute(PostgreSQLQueries.CREATE_TABLE.value)
                 cur.execute(PostgreSQLQueries.ADD_COLUMN_STATUS.value)
-                cur.execute(PostgreSQLQueries.ADD_COLUMN_TAG.value)
+                cur.execute(PostgreSQLQueries.ADD_COLUMN_TAGS.value)
                 cur.execute(PostgreSQLQueries.ADD_COLUMN_OWNER.value)
                 cur.execute(PostgreSQLQueries.DROP_OLD_UNIQUE_INDEX.value)
                 cur.execute(PostgreSQLQueries.CREATE_OWNER_UNIQUE_INDEX.value)
@@ -388,6 +388,21 @@ class PostgreSQLStorage(StorageBackend):
                 stored_owner = row[1] if len(row) > 1 else None
                 result.append(AgentRecord(agent_card=agent, owner=stored_owner))
             logger.debug(f"Found {len(result)} agents by owner '{owner}' in PostgreSQL")
+            return result
+        finally:
+            self.pool.putconn(conn)
+
+    def find_by_tag(self, tag: str) -> List[AgentCard]:
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    PostgreSQLQueries.FIND_BY_TAG.value,
+                    (json.dumps([tag]),)
+                )
+                rows = cur.fetchall()
+            result = [AgentCard(**(r[0] if isinstance(r[0], dict) else json.loads(r[0]))) for r in rows]
+            logger.debug(f"Found {len(result)} agents by tag '{tag}' in PostgreSQL")
             return result
         finally:
             self.pool.putconn(conn)

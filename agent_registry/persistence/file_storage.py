@@ -27,6 +27,7 @@ from agent_registry.config import PERSISTENCE_METADATA_FILE, PERSISTENCE_TAGS_FI
 from .base import StorageBackend, AgentRecord
 
 
+
 class FileStorage(StorageBackend):
     def __init__(self, file_path: str, metadata_file: str = None, tags_file: str = None, max_file_size: int = 100 * 1024 * 1024):
         self.file_path = file_path
@@ -35,11 +36,11 @@ class FileStorage(StorageBackend):
         self.max_file_size = max_file_size
         self._agents: Dict[tuple, AgentCard] = {}
         self._status_map: Dict[tuple, str] = {}
-        self._tags_map: Dict[tuple, List[str]] = {}
         self._owner_map: Dict[tuple, Optional[str]] = {}
         self._tags_map: Dict[tuple, List[str]] = {}
         self._created_at_map: Dict[tuple, str] = {}
         self._updated_at_map: Dict[tuple, str] = {}
+        self._tags_map: Dict[tuple, List[str]] = {}
         self._load()
 
     @classmethod
@@ -63,12 +64,12 @@ class FileStorage(StorageBackend):
             self._status_map[key] = agent.status
         else:
             self._status_map[key] = 'published'
+        self._tags_map[key] = []
         self._owner_map[key] = owner
         self._tags_map[key] = []
         now = datetime.utcnow().isoformat()
         self._created_at_map[key] = now
         self._updated_at_map[key] = now
-        self._tags_map[key] = []
         self._save()
         logger.info(f"Registered agent: {agent.name} (org={agent.provider.organization}, owner={owner})")
         return True

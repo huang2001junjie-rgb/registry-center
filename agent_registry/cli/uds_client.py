@@ -22,7 +22,7 @@ All CLI commands that need internal service access should use this client.
 
 import json
 import socket
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from loguru import logger
 
@@ -107,6 +107,54 @@ class UDSClient:
         return self.send_request("approval", {
             "agent_name": agent_name,
             "organization": organization
+        })
+
+    def get_agent(self, agent_name: str, organization: str) -> Dict[str, Any]:
+        """Get single agent metadata (agent_name, organization, status, tag)"""
+        return self.send_request("get_agent", {
+            "agent_name": agent_name,
+            "organization": organization
+        })
+
+    def list_agents(self) -> Dict[str, Any]:
+        """Get all agents metadata"""
+        return self.send_request("list_agents", {})
+
+    def add_tags(self, agent_name: str, organization: str, tags: List[str]) -> Dict[str, Any]:
+        """Add tags to agent"""
+        return self.send_request("add_tag", {
+            "agent_name": agent_name,
+            "organization": organization,
+            "tags": tags
+        })
+
+    def remove_tags(self, agent_name: str, organization: str, tags: List[str]) -> Dict[str, Any]:
+        """Remove tags from agent"""
+        return self.send_request("remove_tag", {
+            "agent_name": agent_name,
+            "organization": organization,
+            "tags": tags
+        })
+
+    def update_tags(self, agent_name: str, organization: str, tags: List[str]) -> Dict[str, Any]:
+        """Update agent tags (full replacement)"""
+        return self.send_request("update_tag", {
+            "agent_name": agent_name,
+            "organization": organization,
+            "tags": tags
+        })
+
+    def get_tags(self, agent_name: str, organization: str) -> Dict[str, Any]:
+        """Get agent tags"""
+        return self.send_request("get_tag", {
+            "agent_name": agent_name,
+            "organization": organization
+        })
+
+    def find_by_tag(self, tag: str) -> Dict[str, Any]:
+        """Find agents by tag"""
+        return self.send_request("list_tag", {
+            "tag": tag
         })
 
 

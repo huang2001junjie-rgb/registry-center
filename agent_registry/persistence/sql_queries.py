@@ -100,12 +100,12 @@ class PostgreSQLQueries(str, Enum):
     COUNT_BY_STATUS = "SELECT COUNT(*) FROM agent_card WHERE status = %s"
 
     GET_METADATA = """
-        SELECT name, organization, status, tag FROM agent_card
+        SELECT name, organization, status, tags FROM agent_card
         WHERE name = %s AND organization = %s
     """
 
     GET_ALL_METADATA = """
-        SELECT name, organization, status, tag FROM agent_card
+        SELECT name, organization, status, tags FROM agent_card
     """
 
     GET_CREATED_AT = """

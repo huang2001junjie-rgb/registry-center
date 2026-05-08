@@ -572,46 +572,6 @@ class RegistryCore:
             key = self._make_key(name, organization)
             return self._status_map.get(key)
 
-    def get_tags(self, name: str, organization: str) -> List[str]:
-        """Get agent tags from tags map."""
-        if self.persistence_mode == 'postgresql':
-            return self.storage.get_tags(name, organization)
-        else:
-            key = self._make_key(name, organization)
-            return self._tags_map.get(key, [])
-
-    def update_tags(self, name: str, organization: str, new_tags: List[str]) -> bool:
-        """
-        Update agent tags (append and deduplicate).
-
-        Args:
-            name: Agent name
-            organization: Organization name
-            new_tags: New tags to append
-
-        Returns:
-            bool: Whether update was successful
-        """
-        with self._lock:
-            if self.persistence_mode == 'postgresql':
-                agent = self.storage.find_by_key(name, organization)
-                if not agent:
-                    logger.warning(f"Agent not found: {name} ({organization})")
-                    return False
-                return self.storage.update_tags(name, organization, new_tags)
-            else:
-                key = self._make_key(name, organization)
-                if key not in self._agents:
-                    logger.warning(f"Agent not found: {name} ({organization})")
-                    return False
-
-                current_tags = self._tags_map.get(key, [])
-                merged_tags = list(set(current_tags + new_tags))
-                self._tags_map[key] = merged_tags
-                self._updated_at_map[key] = datetime.utcnow().isoformat()
-                self._save_registry()
-                logger.info(f"Agent tags updated: {name} -> {merged_tags}")
-                return True
 
     def get_metadata(self, name: str, organization: str) -> Dict[str, Any]:
         """
@@ -737,20 +697,44 @@ class RegistryCore:
     def add_tags(self, name: str, organization: str, tags: List[str]) -> bool:
         """Add tags to agent (deduplicated)."""
         with self._lock:
-            current_tags = self.get_tags(name, organization)
-            if current_tags is None:
-                current_tags = []
-            merged_tags = list(set(current_tags + tags))
-            return self.update_tags(name, organization, merged_tags)
+            if self.persistence_mode == 'postgresql':
+                current_tags = self.storage.get_tags(name, organization)
+                merged_tags = list(set((current_tags or []) + tags))
+                return self.storage.update_tags(name, organization, merged_tags)
+            else:
+                key = self._make_key(name, organization)
+                if key not in self._agents:
+                    logger.warning(f"Agent not found: {name} ({organization})")
+                    return False
+                current_tags = self._tags_map.get(key, [])
+                merged_tags = list(set(current_tags + tags))
+                self._tags_map[key] = merged_tags
+                self._updated_at_map[key] = datetime.utcnow().isoformat()
+                self._save_tags()
+                self._save_registry()
+                logger.info(f"Agent tags added: {name} -> {merged_tags}")
+                return True
 
     def remove_tags(self, name: str, organization: str, tags: List[str]) -> bool:
         """Remove specified tags from agent."""
         with self._lock:
-            current_tags = self.get_tags(name, organization)
-            if current_tags is None:
-                current_tags = []
-            remaining_tags = [t for t in current_tags if t not in tags]
-            return self.update_tags(name, organization, remaining_tags)
+            if self.persistence_mode == 'postgresql':
+                current_tags = self.storage.get_tags(name, organization)
+                remaining_tags = [t for t in (current_tags or []) if t not in tags]
+                return self.storage.update_tags(name, organization, remaining_tags)
+            else:
+                key = self._make_key(name, organization)
+                if key not in self._agents:
+                    logger.warning(f"Agent not found: {name} ({organization})")
+                    return False
+                current_tags = self._tags_map.get(key, [])
+                remaining_tags = [t for t in current_tags if t not in tags]
+                self._tags_map[key] = remaining_tags
+                self._updated_at_map[key] = datetime.utcnow().isoformat()
+                self._save_tags()
+                self._save_registry()
+                logger.info(f"Agent tags removed: {name} -> {remaining_tags}")
+                return True
 
     def find_by_tag(self, tag: str) -> List[AgentCard]:
         """Find agents by tag."""
@@ -762,8 +746,6 @@ class RegistryCore:
                 if tag in tags:
                     agent = self._agents.get(key)
                     if agent:
-                        if key in self._status_map:
-                            agent.status = self._status_map[key]
                         result.append(agent)
             return result
 

@@ -4,79 +4,11 @@ Tag Management Commands
 Manage agent tags via UDS (Unix Domain Socket) internal service.
 """
 
-import json
-import socket
 from argparse import ArgumentParser, Namespace
-from typing import Dict, Optional, List
+from typing import Dict
 
-from agent_registry.cli import BaseCommand, CLI, Output, cli_logger
-from agent_registry.cli.exceptions import ServiceError, CLIError
-
-
-UDS_SOCKET_PATH = "run/registry-center/internal.sock"
-
-
-class UDSClient:
-    """
-    UDS Client for internal service
-    
-    Connects to Unix Domain Socket to call internal handlers.
-    """
-    
-    def __init__(self, socket_path: Optional[str] = None):
-        self.socket_path = socket_path or UDS_SOCKET_PATH
-    
-    def send_request(self, action: str, params: Dict) -> Dict:
-        """
-        Send request to UDS service
-        
-        Args:
-            action: Action name (e.g., 'tag_add', 'tag_get')
-            params: Request parameters
-            
-        Returns:
-            Response dict with success, message, data, error
-            
-        Raises:
-            ServiceError: If connection fails or request fails
-        """
-        client_socket = None
-        try:
-            client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.connect(self.socket_path)
-            
-            request = {
-                "action": action,
-                "params": params
-            }
-            
-            client_socket.send(json.dumps(request).encode('utf-8'))
-            
-            response_data = client_socket.recv(4096)
-            response = json.loads(response_data.decode('utf-8'))
-            
-            return response
-            
-        except FileNotFoundError:
-            raise ServiceError(
-                f"UDS socket not found at {self.socket_path}.\n"
-                "Please ensure the service is running."
-            )
-        except ConnectionRefusedError:
-            raise ServiceError(
-                f"Connection refused. Service may not be running.\n"
-                f"Socket path: {self.socket_path}"
-            )
-        except Exception as e:
-            raise ServiceError(f"UDS connection error: {e}")
-        finally:
-            if client_socket:
-                client_socket.close()
-
-
-def get_tag_client() -> UDSClient:
-    """Get UDS client instance"""
-    return UDSClient()
+from agent_registry.cli import BaseCommand, CLI, Output
+from agent_registry.cli.uds_client import get_uds_client
 
 
 @CLI.register
@@ -118,36 +50,31 @@ class TagAddCommand(BaseCommand):
     
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("name", help="Agent name")
-        parser.add_argument("--org", "-o", required=True, help="Organization name")
+        parser.add_argument("organization", help="Organization name")
         parser.add_argument("--tags", "-t", required=True, nargs='+', help="Tags to add (space-separated)")
         parser.add_argument("--format", "-f", choices=["text", "json"], default="text")
     
     def execute(self, args: Namespace) -> int:
-        client = get_tag_client()
         output = Output(args.format)
-        
-        try:
-            result = client.send_request("tag_add", {
-                "agent_name": args.name,
-                "organization": args.org,
-                "tags": args.tags
-            })
-            
-            if result.get("success"):
-                if args.format == "json":
-                    output.print(result)
-                else:
-                    tags = result.get("data", {}).get("tags", [])
-                    output.success(f"Tags added successfully")
-                    output.info(f"Current tags: {', '.join(tags)}")
-                return 0
-            else:
-                output.error(result.get("error", "Unknown error"))
-                return 1
-        
-        except ServiceError as e:
-            output.error(str(e))
-            return e.exit_code
+        client = get_uds_client()
+
+        result = client.add_tags(args.name, args.organization, args.tags)
+
+        if args.format == "json":
+            output.print(result)
+            return 0 if result.get("success") else 1
+
+        if result.get("success"):
+            output.success(f"Tags added successfully")
+            tags = result.get("data", {}).get("tags", [])
+            if tags:
+                output.info(f"Current tags: {', '.join(tags)}")
+            return 0
+        else:
+            output.error(result.get("error", "Unknown error"))
+            if result.get("message"):
+                print(f"  Message: {result['message']}")
+            return 1
 
 
 class TagRemoveCommand(BaseCommand):
@@ -163,36 +90,33 @@ class TagRemoveCommand(BaseCommand):
     
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("name", help="Agent name")
-        parser.add_argument("--org", "-o", required=True, help="Organization name")
+        parser.add_argument("organization", help="Organization name")
         parser.add_argument("--tags", "-t", required=True, nargs='+', help="Tags to remove (space-separated)")
         parser.add_argument("--format", "-f", choices=["text", "json"], default="text")
     
     def execute(self, args: Namespace) -> int:
-        client = get_tag_client()
         output = Output(args.format)
-        
-        try:
-            result = client.send_request("tag_remove", {
-                "agent_name": args.name,
-                "organization": args.org,
-                "tags": args.tags
-            })
-            
-            if result.get("success"):
-                if args.format == "json":
-                    output.print(result)
-                else:
-                    tags = result.get("data", {}).get("tags", [])
-                    output.success(f"Tags removed successfully")
-                    output.info(f"Remaining tags: {', '.join(tags) if tags else 'none'}")
-                return 0
+        client = get_uds_client()
+
+        result = client.remove_tags(args.name, args.organization, args.tags)
+
+        if args.format == "json":
+            output.print(result)
+            return 0 if result.get("success") else 1
+
+        if result.get("success"):
+            output.success(f"Tags removed successfully")
+            tags = result.get("data", {}).get("tags", [])
+            if tags:
+                output.info(f"Remaining tags: {', '.join(tags)}")
             else:
-                output.error(result.get("error", "Unknown error"))
-                return 1
-        
-        except ServiceError as e:
-            output.error(str(e))
-            return e.exit_code
+                output.info(f"No tags remaining")
+            return 0
+        else:
+            output.error(result.get("error", "Unknown error"))
+            if result.get("message"):
+                print(f"  Message: {result['message']}")
+            return 1
 
 
 class TagUpdateCommand(BaseCommand):
@@ -208,36 +132,31 @@ class TagUpdateCommand(BaseCommand):
     
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("name", help="Agent name")
-        parser.add_argument("--org", "-o", required=True, help="Organization name")
+        parser.add_argument("organization", help="Organization name")
         parser.add_argument("--tags", "-t", required=True, nargs='+', help="New tags (space-separated)")
         parser.add_argument("--format", "-f", choices=["text", "json"], default="text")
     
     def execute(self, args: Namespace) -> int:
-        client = get_tag_client()
         output = Output(args.format)
-        
-        try:
-            result = client.send_request("tag_update", {
-                "agent_name": args.name,
-                "organization": args.org,
-                "tags": args.tags
-            })
-            
-            if result.get("success"):
-                if args.format == "json":
-                    output.print(result)
-                else:
-                    tags = result.get("data", {}).get("tags", [])
-                    output.success(f"Tags updated successfully")
-                    output.info(f"New tags: {', '.join(tags)}")
-                return 0
-            else:
-                output.error(result.get("error", "Unknown error"))
-                return 1
-        
-        except ServiceError as e:
-            output.error(str(e))
-            return e.exit_code
+        client = get_uds_client()
+
+        result = client.update_tags(args.name, args.organization, args.tags)
+
+        if args.format == "json":
+            output.print(result)
+            return 0 if result.get("success") else 1
+
+        if result.get("success"):
+            output.success(f"Tags updated successfully")
+            tags = result.get("data", {}).get("tags", [])
+            if tags:
+                output.info(f"New tags: {', '.join(tags)}")
+            return 0
+        else:
+            output.error(result.get("error", "Unknown error"))
+            if result.get("message"):
+                print(f"  Message: {result['message']}")
+            return 1
 
 
 class TagGetCommand(BaseCommand):
@@ -253,36 +172,31 @@ class TagGetCommand(BaseCommand):
     
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("name", help="Agent name")
-        parser.add_argument("--org", "-o", required=True, help="Organization name")
+        parser.add_argument("organization", help="Organization name")
         parser.add_argument("--format", "-f", choices=["text", "json"], default="text")
     
     def execute(self, args: Namespace) -> int:
-        client = get_tag_client()
         output = Output(args.format)
-        
-        try:
-            result = client.send_request("tag_get", {
-                "agent_name": args.name,
-                "organization": args.org
-            })
-            
-            if result.get("success"):
-                if args.format == "json":
-                    output.print(result)
-                else:
-                    tags = result.get("data", {}).get("tags", [])
-                    if tags:
-                        output.info(f"Tags for '{args.name}': {', '.join(tags)}")
-                    else:
-                        output.info(f"Agent '{args.name}' has no tags")
-                return 0
+        client = get_uds_client()
+
+        result = client.get_tags(args.name, args.organization)
+
+        if args.format == "json":
+            output.print(result)
+            return 0 if result.get("success") else 1
+
+        if result.get("success"):
+            tags = result.get("data", {}).get("tags", [])
+            if tags:
+                output.info(f"Tags for '{args.name}': {', '.join(tags)}")
             else:
-                output.error(result.get("error", "Unknown error"))
-                return 1
-        
-        except ServiceError as e:
-            output.error(str(e))
-            return e.exit_code
+                output.info(f"Agent '{args.name}' has no tags")
+            return 0
+        else:
+            output.error(result.get("error", "Unknown error"))
+            if result.get("message"):
+                print(f"  Message: {result['message']}")
+            return 1
 
 
 class TagListCommand(BaseCommand):
@@ -301,37 +215,33 @@ class TagListCommand(BaseCommand):
         parser.add_argument("--format", "-f", choices=["text", "json"], default="text")
     
     def execute(self, args: Namespace) -> int:
-        client = get_tag_client()
         output = Output(args.format)
-        
-        try:
-            result = client.send_request("tag_list", {
-                "tag": args.tag
-            })
-            
-            if result.get("success"):
-                if args.format == "json":
-                    output.print(result)
-                else:
-                    agents = result.get("data", {}).get("agents", [])
-                    count = result.get("data", {}).get("count", 0)
-                    
-                    if agents:
-                        output.info(f"Found {count} agents with tag '{args.tag}':")
-                        for agent in agents:
-                            name = agent.get("agent_name", "unknown")
-                            org = agent.get("organization", "unknown")
-                            desc = agent.get("description", "")
-                            if desc:
-                                desc = desc[:50] + "..." if len(desc) > 50 else desc
-                            print(f"  {name} ({org}) - {desc}")
-                    else:
-                        output.info(f"No agents found with tag '{args.tag}'")
-                return 0
+        client = get_uds_client()
+
+        result = client.find_by_tag(args.tag)
+
+        if args.format == "json":
+            output.print(result)
+            return 0 if result.get("success") else 1
+
+        if result.get("success"):
+            agents = result.get("data", {}).get("agents", [])
+            count = result.get("data", {}).get("count", 0)
+
+            if agents:
+                output.info(f"Found {count} agents with tag '{args.tag}':")
+                for agent in agents:
+                    name = agent.get("agent_name", "unknown")
+                    org = agent.get("organization", "unknown")
+                    desc = agent.get("description", "")
+                    if desc:
+                        desc = desc[:50] + "..." if len(desc) > 50 else desc
+                    print(f"  {name} ({org}) - {desc}")
             else:
-                output.error(result.get("error", "Unknown error"))
-                return 1
-        
-        except ServiceError as e:
-            output.error(str(e))
-            return e.exit_code
+                output.info(f"No agents found with tag '{args.tag}'")
+            return 0
+        else:
+            output.error(result.get("error", "Unknown error"))
+            if result.get("message"):
+                print(f"  Message: {result['message']}")
+            return 1

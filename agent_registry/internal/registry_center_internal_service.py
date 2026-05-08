@@ -37,11 +37,11 @@ from common.util.config_util import get_conf
 class RequestDispatcher:
     _handlers: Dict[str, Type[BaseUDSHandler]] = {
         Action.APPROVAL: ApprovalHandler,
-        Action.TAG_ADD: TagAddHandler,
-        Action.TAG_REMOVE: TagRemoveHandler,
-        Action.TAG_UPDATE: TagUpdateHandler,
-        Action.TAG_GET: TagGetHandler,
-        Action.TAG_LIST: TagListHandler,
+        Action.ADD_TAG: TagAddHandler,
+        Action.REMOVE_TAG: TagRemoveHandler,
+        Action.UPDATE_TAG: TagUpdateHandler,
+        Action.GET_TAG: TagGetHandler,
+        Action.LIST_TAG: TagListHandler,
     }
 
     def get_handler(self, action: str) -> Optional[BaseUDSHandler]:
@@ -113,37 +113,53 @@ class RegistryCenterInternalService:
             pass
 
     def _handle_request(self, conn):
+        logger.info("[InternalService] Entering _handle_request method")
         try:
             data = conn.recv(4096)
+            logger.info(f"[InternalService] Received data: {len(data)} bytes")
             if not data:
+                logger.warning("[InternalService] No data received, returning")
                 return
 
             raw_request = json.loads(data.decode('utf-8'))
+            logger.info(f"[InternalService] Request action: {raw_request.get('action')}")
+            logger.debug(f"[InternalService] Request params: {raw_request.get('params')}")
+
             try:
                 request = InternalRequest(**raw_request)
+                logger.info(f"[InternalService] Request validated, action={request.action}")
             except ValidationError as e:
-                logger.error(f"Invalid request format: {e}")
+                logger.error(f"[InternalService] Invalid request format: {e}")
                 response = {"success": False, "error": "Invalid request format", "message": str(e)}
                 conn.send(json.dumps(response).encode('utf-8'))
                 return
 
             handler = self.dispatcher.get_handler(request.action)
+            logger.info(f"[InternalService] Handler found: {handler.__class__.__name__ if handler else 'None'}")
+
             if not handler:
+                logger.error(f"[InternalService] Unknown action: {request.action}")
                 response = {
                     "success": False,
                     "error": f"Unknown action: {request.action}"
                 }
             else:
+                logger.info(f"[InternalService] Calling handler.handle()")
                 response = handler.handle(request.params, self.registry, self.config)
+                logger.info(f"[InternalService] Handler returned response: success={response.get('success')}")
 
             conn.send(json.dumps(response).encode('utf-8'))
+            logger.info("[InternalService] Response sent successfully")
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON request: {e}")
+            logger.error(f"[InternalService] Invalid JSON request: {e}")
             response = {"success": False, "error": "Invalid JSON format"}
             conn.send(json.dumps(response).encode('utf-8'))
         except Exception as e:
-            logger.error(f"Error handling request: {e}")
+            logger.error(f"[InternalService] Error handling request: {e}")
+            import traceback
+            logger.error(f"[InternalService] Traceback: {traceback.format_exc()}")
             response = {"success": False, "error": str(e)}
             conn.send(json.dumps(response).encode('utf-8'))
         finally:
             conn.close()
+            logger.info("[InternalService] Connection closed")
