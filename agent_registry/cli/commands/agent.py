@@ -11,6 +11,19 @@ from agent_registry.cli import BaseCommand, CLI, Output
 from agent_registry.cli.uds_client import get_uds_client
 
 
+def format_timestamp(timestamp: str) -> str:
+    """Format timestamp to seconds precision (YYYY-MM-DDTHH:MM:SS)"""
+    if not timestamp or timestamp == 'N/A':
+        return 'N/A'
+    
+    # Remove microseconds if present (e.g., 2026-05-07T08:11:36.193309 -> 2026-05-07T08:11:36)
+    if '.' in timestamp:
+        return timestamp.split('.')[0]
+    
+    # Remove trailing Z if present and add it back
+    return timestamp.rstrip('Z')
+
+
 @CLI.register
 class AgentCommand(BaseCommand):
     """Agent management command group"""
@@ -86,8 +99,8 @@ class UDSGetCommand(BaseCommand):
                 'organization': args.org,
                 'status': data.get('status', 'published'),
                 'tags': ', '.join(data.get('tag', [])) or 'None',
-                'created_at': data.get('created_at', 'N/A'),
-                'updated_at': data.get('updated_at', 'N/A'),
+                'created_at': format_timestamp(data.get('created_at', '')),
+                'updated_at': format_timestamp(data.get('updated_at', '')),
                 'agentcard': data.get('agentcard', {}),
             }
             
@@ -114,12 +127,14 @@ class UDSListCommand(BaseCommand):
     @property
     def display_config(self) -> Dict:
         return {
-            'table_fields': ['agent_name', 'organization', 'status', 'tags'],
+            'table_fields': ['agent_name', 'organization', 'status', 'tags', 'created_at', 'updated_at'],
             'field_labels': {
                 'agent_name': 'Agent Name',
                 'organization': 'Organization',
                 'status': 'Status',
                 'tags': 'Tags',
+                'created_at': 'Created At',
+                'updated_at': 'Updated At',
             }
         }
 
@@ -149,6 +164,8 @@ class UDSListCommand(BaseCommand):
                     'organization': agent.get("organization", "unknown"),
                     'status': agent.get("status", "unknown"),
                     'tags': ', '.join(agent.get("tag", [])) or 'None',
+                    'created_at': format_timestamp(agent.get("created_at", "")),
+                    'updated_at': format_timestamp(agent.get("updated_at", "")),
                 })
             
             print(self.format_list_output(flattened_agents, title=f"Agents List ({len(agents)} total)"))

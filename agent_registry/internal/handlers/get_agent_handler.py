@@ -29,6 +29,8 @@ class GetAgentHandler(BaseUDSHandler):
         
         status = registry.get_status(agent_name, organization)
         tags = registry.get_tags(agent_name, organization)
+        created_at = registry.get_created_at(agent_name, organization)
+        updated_at = registry.get_updated_at(agent_name, organization)
         agent_dict = MessageToDict(agent, preserving_proto_field_name=True)
         
         return InternalResponse(
@@ -37,6 +39,8 @@ class GetAgentHandler(BaseUDSHandler):
             data={
                 "agentcard": agent_dict,
                 "status": status or "published",
-                "tag": tags or []
+                "tag": tags or [],
+                "created_at": created_at or "",
+                "updated_at": updated_at or ""
             }
         ).model_dump()
