@@ -25,18 +25,20 @@ and persistence using a JSON file.
 import asyncio
 import json
 from functools import partial
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, Dict
 
 import anyio
 from a2a.types import AgentCard
 from fastapi import FastAPI, HTTPException, Query, Request, Depends, status, Path
 from fastapi.responses import JSONResponse
 from google.protobuf.json_format import Parse, MessageToDict
+from jwt import PyJWK
 from loguru import logger
 from limits import strategies, storage, parse_many
 
 from starlette.responses import Response
 
+from agent_registry.agent_registry.jwk_provider import JWKProvider, CertLoadError
 from agent_registry.config import (
     MAX_REQUEST_BODY_SIZE,
     MAX_URL_LENGTH, CONN_TIMEOUT, CONN_MAX, FLOW_CTL_PARALLEL_REGISTER, FLOW_CTL_PARALLEL_QUERY, FLOW_CTL_REGISTER,
