@@ -1,6 +1,6 @@
 import json
 import base64
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 from loguru import logger
 
 from common.util.config_util import get_conf

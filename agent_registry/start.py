@@ -16,6 +16,7 @@
 # agent_registry/start.py
 import asyncio
 import os
+import platform
 import ssl
 import sys
 import threading
@@ -35,6 +36,8 @@ from common.log.audit_logger import LogLevel, OperationResult, OperatorObject, O
 from common.util.cipher_util import DEFAULT_ENCODING
 from common.util.conf_util import conf_singleton_obj, load_cert_password, set_ssl_folder_permissions
 from common.util.config_util import get_conf
+
+IS_WINDOWS = platform.system() == "Windows"
 
 audit_handle = HandlerRegistry.get_handler(InterfaceType.AUDIT)
 
@@ -64,7 +67,10 @@ async def record_startup_log():
     })
 
 
-app.add_event_handler("startup", record_startup_log)
+try:
+    app.add_event_handler("startup", record_startup_log)
+except AttributeError:
+    pass
 
 
 def customized_create_ssl_context(
@@ -134,6 +140,11 @@ class CustomUvicornServer:
 
 def start_internal_service():
     global _internal_service, _internal_thread
+    
+    if IS_WINDOWS:
+        logger.error("CLI client initialization failed: UDS (Unix Domain Socket) is not supported on Windows. Please run in a Linux environment.")
+        return
+    
     try:
         _internal_service = RegistryCenterInternalService()
         _internal_thread = threading.Thread(target=_internal_service.start, daemon=True)
@@ -145,6 +156,10 @@ def start_internal_service():
 
 def stop_internal_service():
     global _internal_service
+    
+    if IS_WINDOWS:
+        return
+    
     if _internal_service:
         try:
             _internal_service.stop()
