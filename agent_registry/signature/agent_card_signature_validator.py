@@ -103,7 +103,11 @@ class AgentCardSignatureValidator:
                         logger.info(f"Signature validation passed with backend key: {kid}")
                         return ValidationResult(is_valid=True)
                     except (NoSignatureError, InvalidSignaturesError) as e:
-                        logger.warning(f"Backend key validation failed: {e}")
+                        logger.warning(f"Backend key signature validation failed: {e}")
+                    except TypeError as e:
+                        logger.warning(f"Backend key fetcher returned None: {e}")
+                    except Exception as e:
+                        logger.warning(f"Unexpected backend signature validation error: {e}")
 
             logger.info("Trying jku key signature.")
             jku_key_fetcher = lambda key_id, jku: self.jwk_fetcher.fetch_jku_key(key_id, jku)
@@ -112,27 +116,33 @@ class AgentCardSignatureValidator:
                 verifier(agent_card)
                 logger.info("Signature validation passed with jku key.")
                 return ValidationResult(is_valid=True)
-            except NoSignatureError:
-                logger.error("No jku key found.")
-            except InvalidSignaturesError:
-                logger.error("Jku key signature validations failed")
+            except NoSignatureError as e:
+                logger.error(f"No valid signature found: {e}")
+            except InvalidSignaturesError as e:
+                logger.error(f"JKU signature validation failed: {e}")
+            except TypeError as e:
+                logger.error(f"Failed to fetch signature key from JKU URL: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error during JKU signature validation: {e}")
 
             logger.error("All signature validations failed")
             return ValidationResult(
                 is_valid=False,
                 error_code="SIG005",
-                error_message="All signature validations failed",
+                error_message="Signature validation failed: unable to verify signature with provided keys. Please ensure backend public key is configured or JKU URL is accessible.",
                 details={
-                    "total_signatures": len(signatures)
+                    "total_signatures": len(signatures),
+                    "backend_key_checked": True,
+                    "jku_key_checked": True
                 }
             )
 
         except Exception as e:
-            logger.error(f"AgentCard validation error: {e}")
+            logger.error(f"Signature validation internal error: {e}")
             return ValidationResult(
                 is_valid=False,
                 error_code="SIG999",
-                error_message="Internal server error",
+                error_message=f"Signature validation internal error: {str(e)}",
                 details={"error": str(e)}
             )
 
