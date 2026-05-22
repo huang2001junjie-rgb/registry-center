@@ -94,7 +94,13 @@ def get_registry_signer() -> Optional[AgentCardSigner]:
             private_key_path = config.get('jwk_private_key_path', '')
             cert_path = config.get('jwk_cert_path', '')
             password_path = config.get('jwk_private_key_password', '')
+            
+            ip = config.get('ip', '127.0.0.1')
+            port = config.get('port', '5000')
+            jku_url = f"https://{ip}:{port}/rest/v1/registry-center/keys"
+            
             logger.info(f"[DEBUG] private_key_path: '{private_key_path}', cert_path: '{cert_path}', password_path: '{password_path}'")
+            logger.info(f"[DEBUG] jku_url: '{jku_url}' (ip='{ip}', port='{port}')")
             
             if private_key_path and cert_path:
                 try:
@@ -102,6 +108,7 @@ def get_registry_signer() -> Optional[AgentCardSigner]:
                         private_key_path=private_key_path,
                         cert_path=cert_path,
                         password_path=password_path if password_path else None,
+                        jku_url=jku_url,
                         sign_enabled=True
                     )
                     logger.info("Registry signer initialized successfully")
@@ -112,7 +119,9 @@ def get_registry_signer() -> Optional[AgentCardSigner]:
                 logger.warning("Registry signer disabled: missing private_key_path or cert_path")
                 _registry_signer = AgentCardSigner(sign_enabled=False)
         else:
+            logger.info("[DEBUG] registry.sign.enabled is false, creating disabled signer")
             _registry_signer = AgentCardSigner(sign_enabled=False)
+            logger.info("[DEBUG] disabled signer created successfully")
     
     if _registry_signer:
         logger.info(f"[DEBUG] registry_signer.is_enabled(): {_registry_signer.is_enabled()}")

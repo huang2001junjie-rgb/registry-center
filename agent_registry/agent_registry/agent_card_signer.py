@@ -14,10 +14,10 @@ class AgentCardSigner:
 
     def __init__(
         self,
-        private_key_path: str,
-        cert_path: str,
+        private_key_path: str = "",
+        cert_path: str = "",
         password_path: Optional[str] = None,
-        jku_url: Optional[str] = None,
+        jku_url: str = "",
         algorithm: str = "RS256",
         sign_enabled: bool = True
     ):
@@ -162,10 +162,12 @@ class AgentCardSigner:
             signature = self._create_signature(canonical_json)
 
             kid = self._kid
-            jwk_header = self._create_jwk_header(kid)
+            protected_header = self._create_protected_header(kid)
+
+            protected_b64 = self._base64url_encode(json.dumps(protected_header, separators=(',', ':')).encode('utf-8'))
 
             new_sig = AgentCardSignature()
-            new_sig.protected = json.dumps(jwk_header, separators=(',', ':'))
+            new_sig.protected = protected_b64
             new_sig.signature = signature
 
             logger.info(f"[DEBUG] new_sig.protected: {new_sig.protected}")
@@ -180,3 +182,19 @@ class AgentCardSigner:
         except Exception as e:
             logger.warning(f"Failed to sign agent card: {e}. Returning original agent card.")
             return agent_card
+
+    def _create_protected_header(self, kid: str) -> Dict[str, Any]:
+        """Create protected header for JWS signature"""
+        public_key = self._private_key.public_key()
+        numbers = public_key.public_numbers()
+
+        return {
+            "alg": self.algorithm,
+            "typ": "JOSE",
+            "kid": kid,
+            "jku": self.jku_url,
+            "kty": "RSA",
+            "use": "sig",
+            "n": self._base64url_encode(numbers.n.to_bytes((numbers.n.bit_length() + 7) // 8, 'big')),
+            "e": self._base64url_encode(numbers.e.to_bytes((numbers.e.bit_length() + 7) // 8, 'big'))
+        }
