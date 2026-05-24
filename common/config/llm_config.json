@@ -1,66 +1,73 @@
 {
-  "openai_style_llm": {
-    "description": "Large language model in OpenAI style (e.g., DeepSeek, GPT, etc.)",
-    "model": "your-model-name",
+  "chat": {
+    "description": "Chat/LLM model for PSOP generation and execution",
+    "model": "deepseek-chat",
+    "url": "https://api.deepseek.com/v1/chat/completions",
+    "api_key": "<YOUR_API_KEY>",
     "enable_thinking": true,
-    "api": "https://your-openai-style-api-endpoint.com",
-    "api_key": "<YOUR_API_KEY>"
-  },
-  "aoc_chat_llm": {
-    "description": "AOC platform chat model (e.g., Qwen3_32B)",
-    "model": "Qwen3_32B",
-    "enable_thinking": false,
-    "api": "http://<YOUR_AOC_HOST>:<PORT>/aoc/openapi/<YOUR_ENDPOINT_ID>",
-    "api_key": "dummy",
-    "extra": {
-      "app_key": "<YOUR_APP_KEY>",
-      "app_secret": "<YOUR_APP_SECRET>",
-      "authorization": "Bearer <YOUR_BEARER_TOKEN>",
-      "api_code": "<YOUR_API_CODE>",
-      "api_version": "1.0",
-      "scenario_code": "<YOUR_SCENARIO_CODE>",
-      "scenario_version": "<YOUR_SCENARIO_VERSION>",
-      "ability_code": "<YOUR_ABILITY_CODE>",
-      "test_flag": "1",
-      "request_template": "{\"model\": \"Qwen3_32B\", \"messages\": [{\"role\": \"user\", \"content\": \"{prompt}\"}], \"chat_template_kwargs\": {\"enable_thinking\": {enable_thinking}}}"
+    "headers": {},
+    "body": {
+      "model": "$MODEL",
+      "messages": [{"role": "user", "content": "$PROMPT"}]
+    },
+    "response": {
+      "answer": "choices[0].message.content",
+      "reasoning": "choices[0].message.reasoning_content"
     }
   },
-  "aoc_embedding_llm": {
-    "description": "AOC platform embedding model (e.g., BGE-M3)",
+  "embed": {
+    "description": "Embedding model for vector similarity",
     "model": "bge-m3",
-    "enable_thinking": false,
-    "api": "http://<YOUR_AOC_HOST>:<PORT>/aoc/openapi/<YOUR_ENDPOINT_ID>",
+    "url": "http://127.0.0.1:3021/aoc/openapi/YOUR_EMBED_ENDPOINT",
     "api_key": "dummy",
-    "extra": {
-      "app_key": "<YOUR_APP_KEY>",
-      "app_secret": "<YOUR_APP_SECRET>",
-      "authorization": "Bearer <YOUR_BEARER_TOKEN>",
-      "api_code": "<YOUR_API_CODE>",
+    "enable_thinking": false,
+    "auth": {
+      "type": "aoc_signed",
+      "app_key": "YOUR_APP_KEY",
+      "app_secret": "YOUR_APP_SECRET",
+      "authorization": "Bearer YOUR_BEARER_TOKEN",
+      "api_code": "YOUR_API_CODE",
       "api_version": "1.0",
-      "scenario_code": "<YOUR_SCENARIO_CODE>",
-      "scenario_version": "<YOUR_SCENARIO_VERSION>",
-      "ability_code": "<YOUR_ABILITY_CODE>",
-      "test_flag": "1",
-      "request_template": "{\"model\": \"bge-m3\", \"input\": \"{prompt}\"}"
+      "scenario_code": "YOUR_SCENARIO_CODE",
+      "scenario_version": "V1",
+      "ability_code": "YOUR_ABILITY_CODE",
+      "test_flag": "1"
+    },
+    "headers": {},
+    "body": {
+      "model": "$MODEL",
+      "input": "$PROMPT"
+    },
+    "response": {
+      "embedding": "data[0].embedding"
     }
   },
-  "aoc_reranker_llm": {
-    "description": "AOC platform reranker model (e.g., BGE-Reranker-v2-m3)",
+  "rerank": {
+    "description": "Reranker model for result reordering",
     "model": "bge-reranker-v2-m3",
-    "enable_thinking": false,
-    "api": "http://<YOUR_AOC_HOST>:<PORT>/aoc/openapi/interface/bge-reranker-v2-m3",
+    "url": "http://127.0.0.1:3021/aoc/openapi/interface/bge-reranker-v2-m3",
     "api_key": "dummy",
-    "extra": {
-      "app_key": "<YOUR_APP_KEY>",
-      "app_secret": "<YOUR_APP_SECRET>",
-      "authorization": "Bearer <YOUR_BEARER_TOKEN>",
-      "api_code": "<YOUR_API_CODE>",
+    "enable_thinking": false,
+    "auth": {
+      "type": "aoc_signed",
+      "app_key": "YOUR_APP_KEY",
+      "app_secret": "YOUR_APP_SECRET",
+      "authorization": "Bearer YOUR_BEARER_TOKEN",
+      "api_code": "YOUR_API_CODE",
       "api_version": "1.0",
-      "scenario_code": "<YOUR_SCENARIO_CODE>",
-      "scenario_version": "<YOUR_SCENARIO_VERSION>",
-      "ability_code": "<YOUR_ABILITY_CODE>",
-      "test_flag": "1",
-      "request_template": "{\"model\": \"bge-reranker-v2-m3\", \"query\": \"{query}\", \"documents\": {documents}}"
+      "scenario_code": "YOUR_SCENARIO_CODE",
+      "scenario_version": "V1",
+      "ability_code": "YOUR_ABILITY_CODE",
+      "test_flag": "1"
+    },
+    "headers": {},
+    "body": {
+      "model": "$MODEL",
+      "query": "$QUERY",
+      "documents": "$DOCUMENTS"
+    },
+    "response": {
+      "results": "results"
     }
   }
 }

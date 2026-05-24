@@ -32,9 +32,7 @@ from agent_registry.persistence import save_to_file, load_from_file
 from agent_registry.persistence import StorageRegistry, StorageBackend
 from agent_registry.persistence.base import AgentRecord
 from agent_registry.prompts import build_agent_selection_prompt
-from common.llm import get_llm_instance
-from common.llm.config.llm_config import get_llm_config_by_type, LLMType
-from common.llm.provider.llm_provider_registry import get_or_create_llm_instance
+from common.llm import get_llm_instance, get_embed_instance
 from common.util.config_util import get_root_path
 from common.vector_db.vector_db_client.config.vector_db_client_registry import get_or_create_vectordb_tool_instance
 from common.vector_db.vector_db_client.config.vector_db_config import VectorDBType, get_vectordb_config_by_type
@@ -71,8 +69,7 @@ class RegistryCore:
 
         if use_vectordb:
             self.vectordb = get_or_create_vectordb_tool_instance(get_vectordb_config_by_type(VectorDBType.Milvus))
-            self.embedding_tool = get_or_create_llm_instance(
-                get_llm_config_by_type(LLMType.AOC_EMBEDDING_LLM))
+            self.embedding_tool = get_embed_instance()
         elif persistence_mode == 'postgresql':
             self.storage = StorageRegistry.get_backend(self.persistence_mode, self.persistence_conf)
             logger.info(f"Registry initialized with {self.persistence_mode} storage")

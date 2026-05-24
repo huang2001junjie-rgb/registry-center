@@ -13,64 +13,50 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from enum import Enum
-from typing import Optional, Dict, Any
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
+
 from common.llm.config.config_reader import read_config_as_json
 
 
-class LLMType(Enum):
-    OPENAI_STYLE_LLM = "openai_style_llm"
-    AOC_CHAT_LLM = "aoc_chat_llm"           # Chat model
-    AOC_EMBEDDING_LLM = "aoc_embedding_llm" # Embedding model
-    AOC_RERANKER_LLM = "aoc_reranker_llm"   # Reranker model
+@dataclass
+class ModelConfig:
+    description: str = ""
+    model: str = ""
+    url: str = ""
+    api_key: str = ""
+    enable_thinking: bool = False
+    auth: Any = None
+    headers: Dict[str, str] = field(default_factory=dict)
+    body: Dict[str, Any] = field(default_factory=dict)
+    response: Dict[str, str] = field(default_factory=dict)
+
+    @staticmethod
+    def from_dict(key: str, raw: dict) -> "ModelConfig":
+        return ModelConfig(
+            description=raw.get("description", key),
+            model=raw.get("model", ""),
+            url=raw.get("url", ""),
+            api_key=raw.get("api_key", ""),
+            enable_thinking=raw.get("enable_thinking", False),
+            auth=raw.get("auth"),
+            headers=raw.get("headers", {}),
+            body=raw.get("body", {}),
+            response=raw.get("response", {}),
+        )
 
 
-def convert_llm_type(llm_type: str) -> LLMType:
-    for member in LLMType:
-        if member.value == llm_type:
-            return member
-    # Default to OPENAI_STYLE_LLM; can be adjusted as needed
-    return LLMType.OPENAI_STYLE_LLM
+def _load_raw_config() -> Dict[str, Dict[str, Any]]:
+    return read_config_as_json("../../config/llm_config.json")
 
 
-class LLMConfigItem:
-    description: str
-    model: str
-    api: str
-    apikey: str
-    enable_thinking: bool
-    extra: Dict[str, Any]                       # Extra fields
+_raw_config = _load_raw_config()
 
-    def __init__(self, config: dict):
-        self.description = config.get("description", "")
-        self.model = config.get("model", "")
-        self.api = config.get("api", "")
-        self.apikey = config.get("api_key", "")
-        self.enable_thinking = config.get("enable_thinking", True)
-        self.extra = config.get("extra", {})    # Extra fields
+_model_configs: Dict[str, ModelConfig] = {
+    key: ModelConfig.from_dict(key, val)
+    for key, val in _raw_config.items()
+}
 
 
-class LLMConfig:
-    llm_type: LLMType
-    config_item: LLMConfigItem
-
-    def __init__(self, llm_type: str, config_item: dict):
-        self.llm_type = convert_llm_type(llm_type)
-        self.config_item = LLMConfigItem(config_item)
-
-
-def get_llm_config() -> dict[str, LLMConfig]:
-    config: dict[str, dict] = read_config_as_json("../../config/llm_config.json")
-    llm_config_items = {}
-    for key, config_item in config.items():
-        llm_config_items[key] = LLMConfig(key, config_item)
-    return llm_config_items
-
-
-llm_config = get_llm_config()
-
-
-def get_llm_config_by_type(llm_type: LLMType) -> Optional[LLMConfig]:
-    if llm_type.value in llm_config:
-        return llm_config[llm_type.value]
-    return None
+def get_model_config(capability: str) -> Optional[ModelConfig]:
+    return _model_configs.get(capability)
