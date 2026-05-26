@@ -70,29 +70,31 @@ class TestRegistryCoreFileMode:
         agent = self._make_agent()
         result = registry.register(agent)
         assert result is True
-        key = make_agent_key("TestAgent", "TestOrg")
-        assert key in registry._agents
+        found = registry.get_by_key("TestAgent", "TestOrg")
+        assert found is not None
+        assert found.name == "TestAgent"
 
     def test_register_with_status(self, registry):
         agent = self._make_agent()
         result = registry.register_with_status(agent, initial_status='registered')
         assert result is True
-        key = make_agent_key("TestAgent", "TestOrg")
-        assert registry._status_map[key] == 'registered'
+        status = registry.get_status("TestAgent", "TestOrg")
+        assert status == 'registered'
 
     def test_register_sets_timestamps(self, registry):
         agent = self._make_agent()
         registry.register(agent)
-        key = make_agent_key("TestAgent", "TestOrg")
-        assert registry._created_at_map.get(key)
-        assert registry._updated_at_map.get(key)
+        created = registry.get_created_at("TestAgent", "TestOrg")
+        updated = registry.get_updated_at("TestAgent", "TestOrg")
+        assert created != ''
+        assert updated != ''
+        assert created == updated
 
     def test_register_default_published(self, registry):
         agent = self._make_agent()
         registry.register(agent)
-        assert registry.get_status("TestAgent", "TestOrg") == 'published'
-
-    # ---- count and limits ----
+        status = registry.get_status("TestAgent", "TestOrg")
+        assert status == 'published'
 
     def test_count_zero_initially(self, registry):
         assert registry.count() == 0
@@ -101,18 +103,14 @@ class TestRegistryCoreFileMode:
         registry.register(self._make_agent())
         assert registry.count() == 1
 
-    # ---- find / get ----
-
     def test_get_by_key_found(self, registry):
-        agent = self._make_agent()
-        registry.register(agent)
-        result = registry.get_by_key("TestAgent", "TestOrg")
-        assert result is not None
-        assert result.name == "TestAgent"
+        registry.register(self._make_agent())
+        agent = registry.get_by_key("TestAgent", "TestOrg")
+        assert agent is not None
+        assert agent.name == "TestAgent"
 
     def test_get_by_key_not_found(self, registry):
-        result = registry.get_by_key("Nonexistent", "NoOrg")
-        assert result is None
+        assert registry.get_by_key("Nope", "Nope") is None
 
     def test_get_agents_dict_structure(self, registry):
         agent = self._make_agent()
@@ -120,6 +118,7 @@ class TestRegistryCoreFileMode:
         agents = registry.get_agents()
         key = make_agent_key("TestAgent", "TestOrg")
         assert key in agents
+        assert agents[key].name == "TestAgent"
 
     def test_find_exact_by_name_and_org(self, registry):
         registry.register(self._make_agent("A1", "O1"))
@@ -174,8 +173,7 @@ class TestRegistryCoreFileMode:
         registry.register(agent)
         result = registry.deregister("Del", "Org")
         assert result is True
-        key = make_agent_key("Del", "Org")
-        assert key not in registry._agents
+        assert registry.get_by_key("Del", "Org") is None
 
     def test_deregister_not_found(self, registry):
         result = registry.deregister("Ghost", "Org")
@@ -184,9 +182,8 @@ class TestRegistryCoreFileMode:
     def test_deregister_cleans_metadata(self, registry):
         agent = self._make_agent("Clean", "Org")
         registry.register(agent)
-        key = make_agent_key("Clean", "Org")
         registry.deregister("Clean", "Org")
-        assert key not in registry._status_map
+        assert registry.get_status("Clean", "Org") is None
 
     # ---- status ----
 

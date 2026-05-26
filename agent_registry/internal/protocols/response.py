@@ -14,7 +14,7 @@
 #    under the License.
 
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class InternalResponse(BaseModel):
@@ -22,6 +22,5 @@ class InternalResponse(BaseModel):
     message: Optional[str] = Field(None, description="Response message")
     error: Optional[str] = Field(None, description="Error message")
     data: Optional[Dict[str, Any]] = Field(None, description="Response data")
-    
-    class Config:
-        extra = "allow"
+
+    model_config = ConfigDict(extra="allow")

@@ -133,12 +133,6 @@ class FileStorage(StorageBackend):
             logger.info(f"Update failed: agent not found({name},{organization})")
             return False
 
-        stored_owner = self._owner_map.get(key)
-        if stored_owner is not None and stored_owner != '':
-            if owner != stored_owner:
-                logger.warning(f"Update denied: owner mismatch for {name} (stored={stored_owner}, request={owner})")
-                return False
-
         if agent_data.get("name") != name or agent_data.get("provider", {}).get("organization") != organization:
             raise ValueError("Cannot change primary key(name or organization) during update.")
 
@@ -161,12 +155,6 @@ class FileStorage(StorageBackend):
         if key not in self._agents:
             logger.info(f"Deregister failed: agent not found ({name},{organization})")
             return False
-
-        stored_owner = self._owner_map.get(key)
-        if stored_owner is not None and stored_owner != '':
-            if owner != stored_owner:
-                logger.warning(f"Delete denied: owner mismatch for {name} (stored={stored_owner}, request={owner})")
-                return False
 
         del self._agents[key]
         if key in self._status_map:

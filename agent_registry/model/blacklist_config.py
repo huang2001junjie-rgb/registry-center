@@ -117,6 +117,13 @@ PROMPT_INJECTION_BLACKLIST_EN = [
 ]
 
 DANGEROUS_SKILL_BLACKLIST_CN = [
+    "执行代码",
+    "执行命令",
+    "运行命令",
+    "执行Shell",
+    "远程执行",
+    "代码执行",
+    "命令执行",
     "提权",
     "提升权限",
     "获取权限",
@@ -206,38 +213,3 @@ DANGEROUS_SKILL_BLACKLIST_ALL = DANGEROUS_SKILL_BLACKLIST_CN + DANGEROUS_SKILL_B
 
 # Super combined blacklist for maximum performance in skills validation
 MASTER_BLACKLIST_ALL = PROMPT_INJECTION_BLACKLIST_ALL + DANGEROUS_SKILL_BLACKLIST_ALL
-
-DANGEROUS_SKILL_BLACKLIST_CN = [
-    "提权",
-    "提升权限",
-    "获取权限",
-    "权限提升",
-    "绕过安全",
-    "绕过防护",
-    "绕过验证",
-    "突破安全",
-    "突破防护",
-    "安全绕过",
-    "非法管理员权限",
-    "非法超级权限",
-    "非法root权限",
-    "数据库注入",
-    "SQL注入",
-    "窃取密钥",
-    "窃取密码",
-    "窃取凭证",
-    "非法获取密钥",
-    "非法获取密码",
-    "非法获取凭证",
-    "网络攻击",
-    "网络渗透",
-    "网络入侵",
-    "端口扫描",
-    "漏洞扫描",
-    "攻击扫描",
-    "窃取数据",
-    "盗取数据",
-    "数据泄露",
-    "窃取隐私",
-    "非法获取隐私",
-]

@@ -17,21 +17,24 @@
 Tag handler tests
 
 Tests the tag handler classes for UDS internal service:
-- TagAddHandler
-- TagRemoveHandler
+- SetTagsHandler
+- TagCreateHandler
+- TagDeleteHandler
 - TagUpdateHandler
 - TagGetHandler
 - TagListHandler
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from a2a.types import AgentCard
 
+from agent_registry.internal.handlers.set_tags_handler import SetTagsHandler
 from agent_registry.internal.handlers.tag_handler import (
-    TagAddHandler, TagRemoveHandler, TagUpdateHandler,
+    TagCreateHandler, TagDeleteHandler, TagUpdateHandler,
     TagGetHandler, TagListHandler
 )
+from agent_registry.model.tag import Tag
 
 
 def create_mock_agent(name, organization):
@@ -44,407 +47,387 @@ def create_mock_agent(name, organization):
     return agent
 
 
-class TestTagAddHandler:
-    """Test TagAddHandler"""
-    
+def create_mock_tag(tag_id, name):
+    """Helper to create mock tag entity"""
+    tag = Tag(tag_id=tag_id, name=name)
+    return tag
+
+
+class TestSetTagsHandler:
+    """Test SetTagsHandler"""
+
     @pytest.fixture
     def handler(self):
-        """Create TagAddHandler instance"""
-        return TagAddHandler()
-    
+        return SetTagsHandler()
+
     @pytest.fixture
     def mock_registry(self):
-        """Create mock registry"""
         registry = Mock()
         registry.find_by_key = Mock(return_value=Mock(name="test_agent"))
-        registry.get_tags = Mock(return_value=["existing_tag"])
-        registry.add_tags = Mock(return_value=True)
+        registry.get_tag_by_name = Mock(return_value=create_mock_tag("tag1", "production"))
+        registry.update_agent_tags = Mock(return_value=True)
+        registry.get_agent_tags = Mock(return_value=["production", "v1.0"])
         return registry
-    
+
     @pytest.fixture
     def mock_config(self):
-        """Create mock config"""
         return Mock()
-    
-    def test_handle_add_tags_success(self, handler, mock_registry, mock_config):
-        """Test successful tag addition"""
+
+    def test_handle_set_tags_success(self, handler, mock_registry, mock_config):
         params = {
             "agent_name": "test_agent",
             "organization": "test_org",
-            "tags": ["production", "v1.0"]
-        }
-        
-        mock_registry.get_tags.return_value = ["production", "v1.0"]
-        
-        result = handler.handle(params, mock_registry, mock_config)
-        
-        assert result["success"] is True
-        assert result["message"] == "Tags added successfully"
-        assert result["data"]["tags"] == ["production", "v1.0"]
-        mock_registry.add_tags.assert_called_once()
-    
-    def test_handle_add_tags_missing_params(self, handler, mock_registry, mock_config):
-        """Test tag addition with missing parameters"""
-        params = {
             "tags": ["production"]
         }
-        
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
+        assert result["success"] is True
+        assert result["message"] == "Tags set successfully"
+        assert result["data"]["tag"] == ["production", "v1.0"]
+        mock_registry.update_agent_tags.assert_called_once()
+
+    def test_handle_set_tags_missing_params(self, handler, mock_registry, mock_config):
+        params = {"tags": ["production"]}
+
+        result = handler.handle(params, mock_registry, mock_config)
+
         assert result["success"] is False
         assert "Missing required params" in result["error"]
-    
-    def test_handle_add_tags_agent_not_found(self, handler, mock_registry, mock_config):
-        """Test tag addition when agent not found"""
+
+    def test_handle_set_tags_agent_not_found(self, handler, mock_registry, mock_config):
         params = {
             "agent_name": "unknown_agent",
             "organization": "test_org",
             "tags": ["production"]
         }
-        
+
         mock_registry.find_by_key.return_value = None
-        
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is False
         assert "not found" in result["error"].lower()
-    
-    def test_handle_add_tags_invalid_tag_format(self, handler, mock_registry, mock_config):
-        """Test tag addition with invalid tag format"""
+
+    def test_handle_set_tags_invalid_type(self, handler, mock_registry, mock_config):
         params = {
             "agent_name": "test_agent",
             "organization": "test_org",
-            "tags": ["tag@invalid"]
+            "tags": "not_a_list"
         }
-        
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is False
-        assert "invalid" in result["error"].lower()
-    
-    def test_handle_add_tags_empty_tags(self, handler, mock_registry, mock_config):
-        """Test tag addition with empty tags list"""
+        assert "Invalid param type" in result["error"]
+
+    def test_handle_set_tags_exceed_limit(self, handler, mock_registry, mock_config):
         params = {
             "agent_name": "test_agent",
             "organization": "test_org",
-            "tags": []
+            "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11"]
         }
-        
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is False
-        assert "No tags provided" in result["error"]
+        assert "Tag limit exceeded" in result["error"]
+
+    def test_handle_set_tags_nonexistent_tag(self, handler, mock_registry, mock_config):
+        params = {
+            "agent_name": "test_agent",
+            "organization": "test_org",
+            "tags": ["nonexistent"]
+        }
+
+        mock_registry.get_tag_by_name.return_value = None
+
+        result = handler.handle(params, mock_registry, mock_config)
+
+        assert result["success"] is False
+        assert "not found in tag library" in result["message"]
 
 
-class TestTagRemoveHandler:
-    """Test TagRemoveHandler"""
-    
+class TestTagCreateHandler:
+    """Test TagCreateHandler"""
+
     @pytest.fixture
     def handler(self):
-        """Create TagRemoveHandler instance"""
-        return TagRemoveHandler()
-    
+        return TagCreateHandler()
+
     @pytest.fixture
     def mock_registry(self):
-        """Create mock registry"""
         registry = Mock()
-        registry.find_by_key = Mock(return_value=Mock(name="test_agent"))
-        registry.get_tags = Mock(return_value=["tag1", "tag2", "tag3"])
-        registry.remove_tags = Mock(return_value=True)
+        registry.create_tag = Mock(return_value=create_mock_tag("test_id", "test_tag"))
         return registry
-    
+
     @pytest.fixture
     def mock_config(self):
-        """Create mock config"""
         return Mock()
-    
-    def test_handle_remove_tags_success(self, handler, mock_registry, mock_config):
-        """Test successful tag removal"""
-        params = {
-            "agent_name": "test_agent",
-            "organization": "test_org",
-            "tags": ["tag1", "tag2"]
-        }
-        
-        mock_registry.get_tags.return_value = ["tag3"]
-        
+
+    def test_handle_create_tag_success(self, handler, mock_registry, mock_config):
+        params = {"name": "new_tag"}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is True
-        assert result["message"] == "Tags removed successfully"
-        assert result["data"]["tags"] == ["tag3"]
-        mock_registry.remove_tags.assert_called_once()
-    
-    def test_handle_remove_tags_missing_params(self, handler, mock_registry, mock_config):
-        """Test tag removal with missing parameters"""
-        params = {
-            "tags": ["tag1"]
-        }
-        
+        assert result["data"]["name"] == "test_tag"
+        assert "created successfully" in result["message"]
+
+    def test_handle_create_tag_missing_name(self, handler, mock_registry, mock_config):
+        params = {}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is False
-        assert "Missing required params" in result["error"]
-    
-    def test_handle_remove_tags_agent_not_found(self, handler, mock_registry, mock_config):
-        """Test tag removal when agent not found"""
-        params = {
-            "agent_name": "unknown_agent",
-            "organization": "test_org",
-            "tags": ["tag1"]
-        }
-        
-        mock_registry.find_by_key.return_value = None
-        
+        assert "Missing required parameter" in result["error"]
+
+    def test_handle_create_tag_duplicate(self, handler, mock_registry, mock_config):
+        params = {"name": "existing_tag"}
+        mock_registry.create_tag.return_value = None
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
+        assert result["success"] is False
+        assert "Failed to create tag" in result["error"]
+
+
+class TestTagGetHandler:
+    """Test TagGetHandler"""
+
+    @pytest.fixture
+    def handler(self):
+        return TagGetHandler()
+
+    @pytest.fixture
+    def mock_registry(self):
+        registry = Mock()
+        registry.get_tag = Mock(return_value=create_mock_tag("test_id", "test_tag"))
+        registry.get_tag_by_name = Mock(return_value=create_mock_tag("test_id", "test_tag"))
+        return registry
+
+    @pytest.fixture
+    def mock_config(self):
+        return Mock()
+
+    def test_handle_get_tag_by_id(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "test_id"}
+
+        result = handler.handle(params, mock_registry, mock_config)
+
+        assert result["success"] is True
+        assert result["data"]["tag_id"] == "test_id"
+        assert result["data"]["name"] == "test_tag"
+
+    def test_handle_get_tag_by_name(self, handler, mock_registry, mock_config):
+        params = {"name": "test_tag"}
+
+        result = handler.handle(params, mock_registry, mock_config)
+
+        assert result["success"] is True
+        assert result["data"]["tag_id"] == "test_id"
+
+    def test_handle_get_tag_missing_params(self, handler, mock_registry, mock_config):
+        params = {}
+
+        result = handler.handle(params, mock_registry, mock_config)
+
+        assert result["success"] is False
+        assert "Missing required parameter" in result["error"]
+
+    def test_handle_get_tag_not_found(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "nonexistent"}
+        mock_registry.get_tag.return_value = None
+
+        result = handler.handle(params, mock_registry, mock_config)
+
         assert result["success"] is False
         assert "not found" in result["error"].lower()
 
 
 class TestTagUpdateHandler:
     """Test TagUpdateHandler"""
-    
+
     @pytest.fixture
     def handler(self):
-        """Create TagUpdateHandler instance"""
         return TagUpdateHandler()
-    
+
     @pytest.fixture
     def mock_registry(self):
-        """Create mock registry"""
         registry = Mock()
-        registry.find_by_key = Mock(return_value=Mock(name="test_agent"))
-        registry.get_tags = Mock(return_value=["new_tag1", "new_tag2"])
-        registry.update_tags = Mock(return_value=True)
+        registry.get_tag = Mock(return_value=create_mock_tag("test_id", "old_name"))
+        registry.update_tag = Mock(return_value=True)
         return registry
-    
+
     @pytest.fixture
     def mock_config(self):
-        """Create mock config"""
         return Mock()
-    
-    def test_handle_update_tags_success(self, handler, mock_registry, mock_config):
-        """Test successful tag update"""
-        params = {
-            "agent_name": "test_agent",
-            "organization": "test_org",
-            "tags": ["new_tag1", "new_tag2"]
-        }
-        
+
+    def test_handle_update_tag_success(self, handler, mock_registry, mock_config):
+        mock_registry.get_tag.return_value = create_mock_tag("test_id", "new_name")
+        params = {"tag_id": "test_id", "name": "new_name"}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is True
-        assert result["message"] == "Tags updated successfully"
-        assert result["data"]["tags"] == ["new_tag1", "new_tag2"]
-        mock_registry.update_tags.assert_called_once()
-    
-    def test_handle_update_tags_clear_all(self, handler, mock_registry, mock_config):
-        """Test clearing all tags with update"""
-        params = {
-            "agent_name": "test_agent",
-            "organization": "test_org",
-            "tags": []
-        }
-        
-        mock_registry.get_tags.return_value = []
-        
+        assert "updated successfully" in result["message"]
+
+    def test_handle_update_tag_missing_params(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "test_id"}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
-        assert result["success"] is True
-        assert result["message"] == "Tags updated successfully"
-        assert result["data"]["tags"] == []
+
+        assert result["success"] is False
+        assert "Missing required parameters" in result["error"]
+
+    def test_handle_update_tag_failed(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "test_id", "name": "new_name"}
+        mock_registry.update_tag.return_value = False
+
+        result = handler.handle(params, mock_registry, mock_config)
+
+        assert result["success"] is False
+        assert "Failed to update tag" in result["error"]
 
 
-class TestTagGetHandler:
-    """Test TagGetHandler"""
-    
+class TestTagDeleteHandler:
+    """Test TagDeleteHandler"""
+
     @pytest.fixture
     def handler(self):
-        """Create TagGetHandler instance"""
-        return TagGetHandler()
-    
+        return TagDeleteHandler()
+
     @pytest.fixture
     def mock_registry(self):
-        """Create mock registry"""
         registry = Mock()
-        registry.find_by_key = Mock(return_value=Mock(name="test_agent"))
-        registry.get_tags = Mock(return_value=["tag1", "tag2"])
+        registry.get_tag = Mock(return_value=create_mock_tag("test_id", "test_tag"))
+        registry.find_agents_by_tag = Mock(return_value=[])
+        registry.delete_tag = Mock(return_value=True)
         return registry
-    
+
     @pytest.fixture
     def mock_config(self):
-        """Create mock config"""
         return Mock()
-    
-    def test_handle_get_tags_success(self, handler, mock_registry, mock_config):
-        """Test successful tag retrieval"""
-        params = {
-            "agent_name": "test_agent",
-            "organization": "test_org"
-        }
-        
+
+    def test_handle_delete_tag_success(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "test_id"}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is True
-        assert result["message"] == "Tags retrieved successfully"
-        assert result["data"]["tags"] == ["tag1", "tag2"]
-    
-    def test_handle_get_tags_empty(self, handler, mock_registry, mock_config):
-        """Test tag retrieval when agent has no tags"""
-        params = {
-            "agent_name": "test_agent",
-            "organization": "test_org"
-        }
-        
-        mock_registry.get_tags.return_value = []
-        
+        assert "deleted successfully" in result["message"]
+
+    def test_handle_delete_tag_missing_param(self, handler, mock_registry, mock_config):
+        params = {}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
-        assert result["success"] is True
-        assert result["data"]["tags"] == []
-    
-    def test_handle_get_tags_agent_not_found(self, handler, mock_registry, mock_config):
-        """Test tag retrieval when agent not found"""
-        params = {
-            "agent_name": "unknown_agent",
-            "organization": "test_org"
-        }
-        
-        mock_registry.find_by_key.return_value = None
-        
+
+        assert result["success"] is False
+        assert "Missing required parameter" in result["error"]
+
+    def test_handle_delete_tag_not_found(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "nonexistent"}
+        mock_registry.get_tag.return_value = None
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is False
         assert "not found" in result["error"].lower()
+
+    def test_handle_delete_tag_in_use(self, handler, mock_registry, mock_config):
+        params = {"tag_id": "test_id"}
+        mock_agent = create_mock_agent("agent1", "org1")
+        mock_registry.find_agents_by_tag.return_value = [mock_agent]
+
+        result = handler.handle(params, mock_registry, mock_config)
+
+        assert result["success"] is False
+        assert "used by" in result["message"]
 
 
 class TestTagListHandler:
     """Test TagListHandler"""
-    
+
     @pytest.fixture
     def handler(self):
-        """Create TagListHandler instance"""
         return TagListHandler()
-    
+
     @pytest.fixture
     def mock_registry(self):
-        """Create mock registry"""
         registry = Mock()
-        # Return mock AgentCard objects
-        agent1 = create_mock_agent("agent1", "org1")
-        agent2 = create_mock_agent("agent2", "org2")
-        registry.find_by_tag = Mock(return_value=[agent1, agent2])
+        registry.list_tags = Mock(return_value=[
+            create_mock_tag("id1", "tag1"),
+            create_mock_tag("id2", "tag2"),
+        ])
         return registry
-    
+
     @pytest.fixture
     def mock_config(self):
-        """Create mock config"""
         return Mock()
-    
+
     def test_handle_list_tags_success(self, handler, mock_registry, mock_config):
-        """Test successful tag listing"""
-        params = {
-            "tag": "production"
-        }
-        
+        params = {}
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is True
-        assert "Found 2 agents" in result["message"]
         assert result["data"]["count"] == 2
-        assert len(result["data"]["agents"]) == 2
-    
+        assert len(result["data"]["tags"]) == 2
+        assert result["data"]["tags"][0]["name"] == "tag1"
+
     def test_handle_list_tags_empty(self, handler, mock_registry, mock_config):
-        """Test tag listing when no agents have the tag"""
-        params = {
-            "tag": "nonexistent_tag"
-        }
-        
-        mock_registry.find_by_tag.return_value = []
-        
+        params = {}
+        mock_registry.list_tags.return_value = []
+
         result = handler.handle(params, mock_registry, mock_config)
-        
+
         assert result["success"] is True
         assert result["data"]["count"] == 0
-        assert result["data"]["agents"] == []
-    
-    def test_handle_list_tags_missing_param(self, handler, mock_registry, mock_config):
-        """Test tag listing with missing tag parameter"""
-        params = {}
-        
-        result = handler.handle(params, mock_registry, mock_config)
-        
-        assert result["success"] is False
-        assert "Missing required param" in result["error"]
+        assert result["data"]["tags"] == []
 
 
 class TestTagHandlerIntegration:
     """Integration tests for tag handlers"""
-    
+
     @pytest.fixture
     def mock_registry(self):
-        """Create mock registry with all methods"""
         registry = Mock()
         registry.find_by_key = Mock(return_value=Mock(name="test_agent"))
-        registry.get_tags = Mock(return_value=[])
-        registry.add_tags = Mock(return_value=True)
-        registry.remove_tags = Mock(return_value=True)
-        registry.update_tags = Mock(return_value=True)
-        registry.find_by_tag = Mock(return_value=[])
+        registry.get_tag_by_name = Mock(return_value=create_mock_tag("tag_id_1", "production"))
+        registry.update_agent_tags = Mock(return_value=True)
+        registry.get_agent_tags = Mock(return_value=["production"])
+        registry.create_tag = Mock(return_value=create_mock_tag("tag_id_1", "production"))
+        registry.get_tag = Mock(return_value=create_mock_tag("tag_id_1", "production"))
+        registry.delete_tag = Mock(return_value=True)
+        registry.find_agents_by_tag = Mock(return_value=[])
+        registry.list_tags = Mock(return_value=[create_mock_tag("tag_id_1", "production")])
         return registry
-    
+
     @pytest.fixture
     def mock_config(self):
-        """Create mock config"""
         return Mock()
-    
-    def test_add_then_get_tags(self, mock_registry, mock_config):
-        """Test adding tags then retrieving them"""
-        add_handler = TagAddHandler()
-        get_handler = TagGetHandler()
-        
-        # Add tags
-        add_params = {
-            "agent_name": "test_agent",
-            "organization": "test_org",
-            "tags": ["production", "v1.0"]
-        }
-        mock_registry.get_tags.return_value = ["production", "v1.0"]
-        add_result = add_handler.handle(add_params, mock_registry, mock_config)
-        assert add_result["success"] is True
-        
-        # Get tags
-        get_params = {
-            "agent_name": "test_agent",
-            "organization": "test_org"
-        }
-        get_result = get_handler.handle(get_params, mock_registry, mock_config)
-        assert get_result["success"] is True
-        assert get_result["data"]["tags"] == ["production", "v1.0"]
-    
-    def test_update_then_remove_tags(self, mock_registry, mock_config):
-        """Test updating tags then removing one"""
-        update_handler = TagUpdateHandler()
-        remove_handler = TagRemoveHandler()
-        
-        # Update tags
-        update_params = {
-            "agent_name": "test_agent",
-            "organization": "test_org",
-            "tags": ["tag1", "tag2", "tag3"]
-        }
-        mock_registry.get_tags.return_value = ["tag1", "tag2", "tag3"]
-        update_result = update_handler.handle(update_params, mock_registry, mock_config)
-        assert update_result["success"] is True
-        
-        # Remove tag
-        remove_params = {
-            "agent_name": "test_agent",
-            "organization": "test_org",
-            "tags": ["tag2"]
-        }
-        mock_registry.get_tags.return_value = ["tag1", "tag3"]
-        remove_result = remove_handler.handle(remove_params, mock_registry, mock_config)
-        assert remove_result["success"] is True
-        assert "tag2" not in remove_result["data"]["tags"]
+
+    def test_create_tag_then_assign_to_agent(self, mock_registry, mock_config):
+        """Test creating a tag and then assigning it to an agent"""
+        create_handler = TagCreateHandler()
+        set_handler = SetTagsHandler()
+
+        create_result = create_handler.handle(
+            {"name": "production"}, mock_registry, mock_config
+        )
+        assert create_result["success"] is True
+
+        set_result = set_handler.handle(
+            {"agent_name": "test_agent", "organization": "test_org", "tags": ["production"]},
+            mock_registry, mock_config
+        )
+        assert set_result["success"] is True
+
+    def test_delete_tag_when_not_in_use(self, mock_registry, mock_config):
+        """Test deleting a tag that is not assigned to any agent"""
+        delete_handler = TagDeleteHandler()
+
+        result = delete_handler.handle(
+            {"tag_id": "tag_id_1"}, mock_registry, mock_config
+        )
+        assert result["success"] is True

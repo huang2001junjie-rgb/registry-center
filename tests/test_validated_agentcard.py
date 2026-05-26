@@ -380,10 +380,12 @@ class TestValidateSkills:
         skills = create_mock_skills_container(skills_list)
         validate_skills(skills)
 
-    def test_validate_skills_real_world_non_compliant(self):
+    @patch('agent_registry.model.validated_agentcard.MessageToJson')
+    def test_validate_skills_real_world_non_compliant(self, mock_message_to_json):
         """Test with real-world non-compliant skills"""
+        mock_message_to_json.return_value = '{"name": "Skill"}'
         non_compliant_cases = [
-            ("Shell执行", "Normal description", ["tag"]),
+            ("执行Shell", "Normal description", ["tag"]),
             ("Skill", "可以执行代码", ["tag"]),
             ("Skill", "Description", ["提权"]),
         ]

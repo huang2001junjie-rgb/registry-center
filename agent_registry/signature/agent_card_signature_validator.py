@@ -30,18 +30,13 @@ class ValidationResult:
 class AgentCardSignatureValidator:
     """AgentCard signature validator (supports protobuf AgentCard)"""
 
-    def __init__(self, jwk_fetcher: JWKFetcher):
+    def __init__(self, jwk_fetcher: JWKFetcher, signature_validation_enabled: bool = True):
         self.jwk_fetcher = jwk_fetcher
-        self._signature_validation_enabled = self._load_signature_config()
+        self._signature_validation_enabled = signature_validation_enabled
 
     @staticmethod
     def _load_signature_config() -> bool:
-        """
-        Load signature validation toggle from configuration file.
-
-        Returns:
-            bool: Whether signature validation is enabled.
-        """
+        """Deprecated: kept for backward compatibility with tests. Use constructor parameter instead."""
         try:
             config = get_conf()
             enabled = config.get('signature_validation_enabled', 'true')

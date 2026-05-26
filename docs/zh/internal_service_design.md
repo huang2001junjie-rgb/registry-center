@@ -290,17 +290,17 @@ async def register_agent(agent_card: ValidatedAgentCard):
     }
 ```
 
-### 2.3 查询接口变更
+### 2.4 查询接口变更
 
-#### 2.3.1 接口说明
+#### 2.4.1 接口说明
 
 系统提供两个HTTP查询接口，用于查询Agent信息：
 
-**接口1：** `/rest/a2a-t/v1/agents/{name}` - 按名称和组织查询单个Agent
+**接口1：** `/rest/v1/registry-center/agent-cards/{organization}/{name}` - 按名称和组织查询单个Agent
 
-**接口2：** `/rest/a2a-t/v1/agents/query` - 按条件查询Agent列表
+**接口2：** `/rest/v1/registry-center/agent-cards` - 按条件查询Agent列表
 
-#### 2.3.2 查询逻辑变更
+#### 2.4.2 查询逻辑变更
 
 **变更规则：只查询处于"已发布"状态的Agent**
 
@@ -312,19 +312,19 @@ async def register_agent(agent_card: ValidatedAgentCard):
 
 修改`agent_registry/server.py`中的查询接口逻辑：
 
-1. `/rest/a2a-t/v1/agents/{name}`接口：
+1. `/rest/v1/registry-center/agent-cards/{organization}/{name}`接口：
    - 调用`find_by_key()`方法时，检查Agent的status字段
    - 如果Agent存在但status为`registered`，返回404或空结果
    - 只有status为`published`的Agent才会返回
 
-2. `/rest/a2a-t/v1/agents/query`接口：
+2. `/rest/v1/registry-center/agent-cards`接口：
    - 调用`find_by_name()`、`find_by_organization()`等方法时，过滤掉status为`registered`的Agent
    - 只返回status为`published`的Agent列表
 
 **代码示例：**
 
 ```python
-@app.get("/rest/a2a-t/v1/agents/{name}")
+@app.get("/rest/v1/registry-center/agent-cards/{organization}/{name}")
 async def get_agent(name: str, organization: str):
     """查询单个Agent（只返回已发布状态）"""
     agent = registry.find_by_key(name, organization)
@@ -335,7 +335,7 @@ async def get_agent(name: str, organization: str):
     
     return agent
 
-@app.get("/rest/a2a-t/v1/agents/query")
+@app.get("/rest/v1/registry-center/agent-cards")
 async def list_agents(name: Optional[str] = None, organization: Optional[str] = None):
     """查询Agent列表（只返回已发布状态）"""
     agents = registry.find_all()
@@ -472,7 +472,7 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
 │ ├─ uvicorn.run()                        │
 │ ├─ 监听：127.0.0.1:5000                  │
 │ ├─ /rest/v1/registry-center/agent-cards       │
-│ ├─ /rest/a2a-t/v1/agents/query          │
+│ ├─ /rest/v1/registry-center/agent-cards          │
 │ └─ ...其他HTTP接口                       │
 │                                         │
 │ 子线程：UDS服务                          │
@@ -942,7 +942,7 @@ async def register_agent(agent: ValidatedAgentCard, request: Request):
 修改查询接口，只返回已发布状态的Agent（响应体不包含status字段）：
 
 ```python
-@app.get("/rest/a2a-t/v1/agents/{name}")
+@app.get("/rest/v1/registry-center/agent-cards/{organization}/{name}")
 async def get_agent(name: str, organization: str):
     agent = registry.find_by_key(name, organization)
     
@@ -953,7 +953,7 @@ async def get_agent(name: str, organization: str):
     # 返回Agent数据，不包含status字段（保持业界标准）
     return MessageToDict(agent, preserving_proto_field_name=True)
 
-@app.get("/rest/a2a-t/v1/agents/query")
+@app.get("/rest/v1/registry-center/agent-cards")
 async def list_agents(name: Optional[str] = None, organization: Optional[str] = None):
     agents = registry.find_all()
     
@@ -1455,7 +1455,7 @@ def test_approval_uds_interface():
    {"success":true, "status":"published", "message":"Agent approval successful"}
    
    # 步骤4：查询Agent
-   curl http://localhost:5000/rest/a2a-t/v1/agents/query?name=TestAgent
+   curl http://localhost:5000/rest/v1/registry-center/agent-cards?name=TestAgent
    
    # 预期：status="published"，Agent可以被查询到
    ```
@@ -1481,7 +1481,7 @@ def test_approval_uds_interface():
    {"success":false, "error":"Approval function is disabled"}
    
    # 步骤4：查询Agent（已发布状态可被查询）
-   curl http://localhost:5000/rest/a2a-t/v1/agents/query?name=TestAgent
+   curl http://localhost:5000/rest/v1/registry-center/agent-cards?name=TestAgent
    
    # 预期：Agent可以被查询到，status="published"
    ```
@@ -1603,7 +1603,7 @@ python -m agent_registry.init
 
 ```bash
 # 查询所有"已发布"状态的Agent（HTTP接口只返回已发布Agent）
-curl http://localhost:5000/rest/a2a-t/v1/agents/query
+curl http://localhost:5000/rest/v1/registry-center/agent-cards
 
 # 查询Agent状态通过HTTP接口（仅返回published状态）
 ```

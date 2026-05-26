@@ -46,7 +46,9 @@ from agent_registry.config import (
     FLOW_CTL_PARALLEL_DEREGISTER, FLOW_CTL_UPDATE, FLOW_CTL_GET, FLOW_CTL_RETRIEVE, FLOW_CTL_DEREGISTER,
     FLOW_CTL_JWK, FLOW_CTL_PARALLEL_JWK, OWNER_ISOLATION_ENABLED, OWNER_VALIDATION_MODE,
 )
-from agent_registry.core import RegistryCore
+from contextlib import asynccontextmanager
+
+from agent_registry.core import RegistryCore, make_agent_key
 from agent_registry.model.validated_agentcard import validate_agent_card
 from agent_registry.registry_instance import get_registry, initialize_registry
 from agent_registry.middleware import ConnectionLimitMiddleware, TimeoutMiddleware
@@ -78,7 +80,8 @@ def get_signature_validator() -> AgentCardSignatureValidator:
     if _signature_validator is None:
         public_key_manager = PublicKeyManager()
         jwk_fetcher = JWKFetcher(public_key_manager)
-        _signature_validator = AgentCardSignatureValidator(jwk_fetcher)
+        validation_enabled = config.get('signature_validation_enabled', 'true').lower() == 'true'
+        _signature_validator = AgentCardSignatureValidator(jwk_fetcher, signature_validation_enabled=validation_enabled)
     return _signature_validator
 
 
@@ -175,6 +178,27 @@ async def async_hit(rate_item, *identifiers: str, cost=1) -> bool:
     """
     func = partial(limiter.hit, rate_item, *identifiers, cost=cost)
     return await asyncio.to_thread(func)
+
+
+@asynccontextmanager
+async def semaphore_guard(sem: anyio.Semaphore):
+    """Acquire a semaphore, yield, then release. Raises 503 if semaphore is at capacity."""
+    try:
+        sem.acquire_nowait()
+        acquired = True
+    except anyio.WouldBlock:
+        acquired = False
+        raise CustomHTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy")
+    try:
+        yield
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in endpoint: {e}")
+        raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from e
+    finally:
+        if acquired:
+            sem.release()
 
 
 class RateLimiter:
@@ -292,6 +316,30 @@ async def security_middleware(request: Request, call_next):
 
 
 # ---------- Routes ----------
+async def _audit_result(op_name: OperationName, success: bool, details: dict, client_ip: str):
+    """Log audit entry for operation result."""
+    await audit_handle.handle({
+        "operation_name": op_name,
+        "level": LogLevel.MINOR,
+        "result": OperationResult.SUCCESS if success else OperationResult.FAILURE,
+        "object_name": OperatorObject.AGENT,
+        "details": details,
+        "client_ip": client_ip
+    })
+
+
+async def _audit_failure(op_name: OperationName, details: dict, client_ip: str):
+    """Log audit entry for operation failure."""
+    await audit_handle.handle({
+        "operation_name": op_name,
+        "level": LogLevel.MINOR,
+        "result": OperationResult.FAILURE,
+        "object_name": OperatorObject.AGENT,
+        "details": details,
+        "client_ip": client_ip
+    })
+
+
 def _get_owner_from_request(request: Request) -> Optional[str]:
     """
     Extract owner (CN) from request header X-SSL-Client-DN.
@@ -392,7 +440,7 @@ async def _check_agent_limit(registry: RegistryCore, client_ip: str, details: di
 async def _check_duplicate_agent(agent: AgentCard, registry: RegistryCore, client_ip: str,
                                  details: dict) -> None:
     """Check if an agent with same (name, organization) already exists, log and raise if found."""
-    key = _make_agent_key(agent.name, agent.provider.organization)
+    key = make_agent_key(agent.name, agent.provider.organization)
     if key in registry.get_agents():
         details["message"] = "Registration skipped: duplicate agent."
         await audit_handle.handle({
@@ -495,7 +543,6 @@ async def _perform_update(
     status_code=status.HTTP_201_CREATED,
 )
 async def register_agent(
-
         request: Request,
         _: Any = Depends(RateLimiter('register')),
         registry: RegistryCore = Depends(get_registry),
@@ -511,16 +558,12 @@ async def register_agent(
     agent_cards = body.get("agentCards", [])
     client_ip = request.client.host
 
-    owner = None
-    if OWNER_ISOLATION_ENABLED:
-        owner = _get_owner_from_request(request)
+    owner = _get_owner_from_request(request) if OWNER_ISOLATION_ENABLED else None
 
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
-    acquired = False
-    try:
-        register_semaphore.acquire_nowait()
-        acquired = True
+
+    async with semaphore_guard(register_semaphore):
         for agent_card in agent_cards:
             agent = Parse(json.dumps(agent_card), AgentCard())
             logger.info(
@@ -541,14 +584,7 @@ async def register_agent(
             signature_result = signature_validator.validate_agent_card(agent)
             if not signature_result.is_valid:
                 details["message"] = signature_result.error_message
-                await audit_handle.handle({
-                    "operation_name": OperationName.REGISTER_AGENT,
-                    "level": LogLevel.MINOR,
-                    "result": OperationResult.FAILURE,
-                    "object_name": OperatorObject.AGENT,
-                    "details": details,
-                    "client_ip": client_ip
-                })
+                await _audit_failure(OperationName.REGISTER_AGENT, details, client_ip)
                 raise CustomHTTPException(
                     status.HTTP_401_UNAUTHORIZED,
                     signature_result.error_message or "Signature verification failed"
@@ -556,41 +592,17 @@ async def register_agent(
 
             logger.info(f"Register agent success: name={agent.name}, org={agent.provider.organization}")
 
-            logger.info(f"[DEBUG] registry_signer exists: {registry_signer is not None}, is_enabled: {registry_signer.is_enabled() if registry_signer else False}")
-            logger.info(f"[DEBUG] agent signatures before sign: {len(agent.signatures)} items")
-
             if registry_signer and registry_signer.is_enabled():
                 agent = registry_signer.sign_agent_card(agent)
-                logger.info(f"[DEBUG] agent signatures after sign: {len(agent.signatures)} items")
                 logger.info(f"Registry signature added for agent: {agent.name}")
 
             approval_enabled = config.get('agent_approval_enabled', 'false')
-            if approval_enabled == 'true':
-                initial_status = 'registered'
-            else:
-                initial_status = 'published'
+            initial_status = 'registered' if approval_enabled == 'true' else 'published'
 
             result = await _perform_registration(agent, client_ip, details, initial_status=initial_status, owner=owner)
-            await audit_handle.handle({
-                "operation_name": OperationName.REGISTER_AGENT,
-                "level": LogLevel.MINOR,
-                "result": OperationResult.SUCCESS if result else OperationResult.FAILURE,
-                "object_name": OperatorObject.AGENT,
-                "details": details,
-                "client_ip": client_ip
-            })
+            await _audit_result(OperationName.REGISTER_AGENT, result, details, client_ip)
 
         return Response(status_code=status.HTTP_201_CREATED)
-    except anyio.WouldBlock as e:
-        raise CustomHTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Unexpected error in registry:{e}")
-        raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from e
-    finally:
-        if acquired:
-            register_semaphore.release()
 
 
 @app.get(
@@ -614,31 +626,20 @@ async def list_agents_exact(
     logger.info(f"Query agents request: name={name}, org={organization}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
-    acquired = False
-    try:
-        query_semaphore.acquire_nowait()
-        acquired = True
-        try:
-            query_handle = HandlerRegistry.get_handler(InterfaceType.QUERY)
-            agents = await query_handle.handle(name, organization)
 
-            published_agents = []
-            for agent in agents:
-                agent_status = registry.get_status(agent.name, agent.provider.organization)
-                if agent_status != 'published':
-                    continue
-                agent_dict = MessageToDict(agent)
-                published_agents.append(agent_dict)
-            logger.info(f"Query agents result: {len(published_agents)} agents found")
-            return {"agentCards": published_agents}
-        except Exception as e:
-            logger.error(f"Error in exact search: {e}")
-            raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,"Internal server error") from e
-    except anyio.WouldBlock as e:
-        raise CustomHTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
-    finally:
-        if acquired:
-            query_semaphore.release()
+    async with semaphore_guard(query_semaphore):
+        query_handle = HandlerRegistry.get_handler(InterfaceType.QUERY)
+        agents = await query_handle.handle(name, organization)
+
+        published_agents = []
+        for agent in agents:
+            agent_status = registry.get_status(agent.name, agent.provider.organization)
+            if agent_status != 'published':
+                continue
+            agent_dict = MessageToDict(agent)
+            published_agents.append(agent_dict)
+        logger.info(f"Query agents result: {len(published_agents)} agents found")
+        return {"agentCards": published_agents}
 
 
 @app.put("/rest/v1/registry-center/agent-cards/{organization}/{name}", response_model=bool, summary="Full update(replace) an agent")
@@ -659,17 +660,12 @@ async def update_agent(
     agent_cards = body_json.get("agentCards", [])
     client_ip = request.client.host
 
-    owner = None
-    if OWNER_ISOLATION_ENABLED:
-        owner = await _verify_owner_permission(request, name, organization, registry)
+    owner = await _verify_owner_permission(request, name, organization, registry) if OWNER_ISOLATION_ENABLED else None
 
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
-    acquired = False
-    try:
-        # Convert to dict for update
-        update_semaphore.acquire_nowait()
-        acquired = True
+
+    async with semaphore_guard(update_semaphore):
         for agent_card in agent_cards:
             agent_data = Parse(json.dumps(agent_card), AgentCard())
             logger.info(f"Update agent request: name={name}, org={organization}, client={client_ip}, owner={owner}")
@@ -687,14 +683,7 @@ async def update_agent(
             signature_result = signature_validator.validate_agent_card(agent_data)
             if not signature_result.is_valid:
                 details["message"] = signature_result.error_message
-                await audit_handle.handle({
-                    "operation_name": OperationName.UPDATE_AGENT,
-                    "level": LogLevel.MINOR,
-                    "result": OperationResult.FAILURE,
-                    "object_name": OperatorObject.AGENT,
-                    "details": details,
-                    "client_ip": client_ip
-                })
+                await _audit_failure(OperationName.UPDATE_AGENT, details, client_ip)
                 raise CustomHTTPException(
                     status.HTTP_401_UNAUTHORIZED,
                     signature_result.error_message or "Signature verification failed"
@@ -710,16 +699,6 @@ async def update_agent(
                 raise CustomHTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
             logger.info(f"Update agent success: name={name}, org={organization}")
         return Response(status_code=status.HTTP_200_OK)
-    except ValueError as e:
-        raise CustomHTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Unexpected error in full update:{e}")
-        raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from e
-    finally:
-        if acquired:
-            update_semaphore.release()
 
 
 @app.delete("/rest/v1/registry-center/agent-cards/{organization}/{name}", response_model=bool, summary="Deregister an agent")
@@ -736,55 +715,22 @@ async def deregister_agent(
     """
     client_ip = request.client.host
 
-    owner = None
-    if OWNER_ISOLATION_ENABLED:
-        owner = await _verify_owner_permission(request, name, organization, registry)
+    owner = await _verify_owner_permission(request, name, organization, registry) if OWNER_ISOLATION_ENABLED else None
 
     logger.info(f"Deregister agent request: name={name}, org={organization}, client={client_ip}, owner={owner}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
-    acquired = False
-    details = {
-        "agentName": name,
-        "organization": organization,
-    }
-    try:
-        deregister_semaphore.acquire_nowait()
-        acquired = True
-        try:
-            deregister_handle = HandlerRegistry.get_handler(InterfaceType.DEREGISTER)
-            success = await deregister_handle.handle(name, organization, owner=owner)
-            if not success:
-                await audit_handle.handle({
-                    "operation_name": OperationName.DEREGISTER_AGENT,
-                    "level": LogLevel.MINOR,
-                    "result": OperationResult.FAILURE,
-                    "object_name": OperatorObject.AGENT,
-                    "details": details,
-                    "client_ip": client_ip
-                })
-                raise CustomHTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
-            await audit_handle.handle({
-                "operation_name": OperationName.DEREGISTER_AGENT,
-                "level": LogLevel.MINOR,
-                "result": OperationResult.SUCCESS,
-                "object_name": OperatorObject.AGENT,
-                "details": details,
-                "client_ip": client_ip
-            })
-            logger.info(f"Deregister agent success: name={name}, org={organization}")
-            return Response(status_code=status.HTTP_200_OK)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Error in deregister: {e}")
-            raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,"Internal server error") from e
 
-    except anyio.WouldBlock as e:
-        raise CustomHTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
-    finally:
-        if acquired:
-            deregister_semaphore.release()
+    details = {"agentName": name, "organization": organization}
+
+    async with semaphore_guard(deregister_semaphore):
+        deregister_handle = HandlerRegistry.get_handler(InterfaceType.DEREGISTER)
+        success = await deregister_handle.handle(name, organization, owner=owner)
+        await _audit_result(OperationName.DEREGISTER_AGENT, success, details, client_ip)
+        if not success:
+            raise CustomHTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
+        logger.info(f"Deregister agent success: name={name}, org={organization}")
+        return Response(status_code=status.HTTP_200_OK)
 
 
 @app.post("/rest/v1/registry-center/agent-cards/semantic-query", response_model=None, summary="Fuzzy retrieve by task")
@@ -802,24 +748,13 @@ async def retrieve_agents_by_task(
     logger.info(f"Retrieve agents request: task='{task}', top_n={top_n}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
-    acquired = False
-    try:
-        retrieve_semaphore.acquire_nowait()
-        acquired = True
-        try:
-            retrieve_handle = HandlerRegistry.get_handler(InterfaceType.RETRIEVE)
-            agents = await retrieve_handle.handle(task, top_n)
-            result = [MessageToDict(agent) for agent in agents]
-            logger.info(f"Retrieve agents result: {len(result)} agents found for task='{task}'")
-            return {"agentCards": result}
-        except Exception as e:
-            logger.error(f"Error in retrieve: {e}")
-            raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,"Internal server error") from e
-    except anyio.WouldBlock as e:
-        raise CustomHTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
-    finally:
-        if acquired:
-            retrieve_semaphore.release()
+
+    async with semaphore_guard(retrieve_semaphore):
+        retrieve_handle = HandlerRegistry.get_handler(InterfaceType.RETRIEVE)
+        agents = await retrieve_handle.handle(task, top_n)
+        result = [MessageToDict(agent) for agent in agents]
+        logger.info(f"Retrieve agents result: {len(result)} agents found for task='{task}'")
+        return {"agentCards": result}
 
 
 @app.get("/rest/v1/registry-center/agent-cards/{organization}/{name}", response_model=None, summary="Get agent by exact name and organization")
@@ -838,32 +773,21 @@ async def get_agent(
     logger.info(f"Get agent request: name={name}, org={organization}, client={client_ip}")
     authenticate_handle = HandlerRegistry.get_handler(InterfaceType.AUTHENTICATE)
     await authenticate_handle.handle(client_ip, request)
-    acquired = False
-    try:
-        get_semaphore.acquire_nowait()
-        acquired = True
-        try:
-            get_handle = HandlerRegistry.get_handler(InterfaceType.GET)
-            record = await get_handle.handle(name, organization)
 
-            if record is None:
-                return {"agentCards": []}
+    async with semaphore_guard(get_semaphore):
+        get_handle = HandlerRegistry.get_handler(InterfaceType.GET)
+        record = await get_handle.handle(name, organization)
 
-            agent_status = registry.get_status(name, organization)
-            if agent_status != 'published':
-                return {"agentCards": []}
+        if record is None:
+            return {"agentCards": []}
 
-            agent_dict = MessageToDict(record.agent_card)
-            logger.info(f"Get agent result: {'found' if agent_dict else 'not found'} for name={name}, org={organization}")
-            return {"agentCards": [agent_dict]}
-        except Exception as e:
-            logger.error(f"Error in get agent: {e}")
-            raise CustomHTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,"Internal server error") from e
-    except anyio.WouldBlock as e:
-        raise CustomHTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Server is busy") from e
-    finally:
-        if acquired:
-            get_semaphore.release()
+        agent_status = registry.get_status(name, organization)
+        if agent_status != 'published':
+            return {"agentCards": []}
+
+        agent_dict = MessageToDict(record.agent_card)
+        logger.info(f"Get agent result: {'found' if agent_dict else 'not found'} for name={name}, org={organization}")
+        return {"agentCards": [agent_dict]}
 
 
 def close_registry():
@@ -873,11 +797,6 @@ def close_registry():
 
 app.add_event_handler("startup", initialize_registry)
 app.add_event_handler("shutdown", close_registry)
-
-
-def _make_agent_key(name: str, organization: str) -> Tuple[str, str]:
-    """Create a normalized key for indexing."""
-    return name.strip(), organization.strip()
 
 
 # ---------- JWK Endpoint ----------

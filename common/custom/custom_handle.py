@@ -82,6 +82,7 @@ class DeregisterHandler(BaseHandler):
 # ==================== Registry ====================
 class HandlerRegistry:
     _registry: Dict[str, Type[BaseHandler]] = {}
+    _instances: Dict[str, BaseHandler] = {}
 
     @classmethod
     def register(cls, interface_type: InterfaceType, handler_class: Type[BaseHandler]) -> None:
@@ -97,27 +98,31 @@ class HandlerRegistry:
     @classmethod
     def get_handler(cls, interface_type: InterfaceType) -> BaseHandler:
         """
-        Get handler instance by interface type.
+        Get handler singleton instance by interface type.
         :param interface_type: Interface type identifier.
         :return: BaseHandler instance (user-defined or default).
         """
-        # If a user-registered class exists, instantiate and return
-        if interface_type.value in cls._registry:
-            return cls._registry[interface_type.value]()
+        key = interface_type.value
+        if key in cls._instances:
+            return cls._instances[key]
 
-        # Otherwise return the corresponding default implementation
-        default_map = {
-            "decrypt": DecryptHandler,
-            "audit": AuditHandler,
-            "authenticate": AuthenticateHandler,
-            "insert": InsertHandler,
-            "query": QueryHandler,
-            "update": UpdateHandler,
-            "get": GetHandler,
-            "retrieve": RetrieveHandler,
-            "deregister": DeregisterHandler,
-        }
-        handler_class = default_map.get(interface_type.value)
-        if handler_class is None:
-            raise ValueError(f"Unknown interface type: {interface_type}")
-        return handler_class()
+        if key in cls._registry:
+            handler = cls._registry[key]()
+        else:
+            default_map = {
+                "decrypt": DecryptHandler,
+                "audit": AuditHandler,
+                "authenticate": AuthenticateHandler,
+                "insert": InsertHandler,
+                "query": QueryHandler,
+                "update": UpdateHandler,
+                "get": GetHandler,
+                "retrieve": RetrieveHandler,
+                "deregister": DeregisterHandler,
+            }
+            handler_class = default_map.get(key)
+            if handler_class is None:
+                raise ValueError(f"Unknown interface type: {interface_type}")
+            handler = handler_class()
+        cls._instances[key] = handler
+        return handler

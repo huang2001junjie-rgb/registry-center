@@ -13,13 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from typing import Dict, Any
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class InternalRequest(BaseModel):
     action: str = Field(..., description="Operation type")
     params: Dict[str, Any] = Field(default_factory=dict, description="Request parameters")
-    
-    class Config:
-        extra = "allow"
+
+    model_config = ConfigDict(extra="allow")
