@@ -846,7 +846,7 @@
   ```json
   GET /rest/v1/registry-center/keys HTTP/1.1
   Host: your-domain.com
-  Content-Type： application/json
+  Content-Type: application/json
   ```
 
 - 响应参数

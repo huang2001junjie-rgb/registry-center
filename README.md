@@ -21,13 +21,14 @@ All Rights Reserved.
 
 注册中心是一个专注于Agent统一管理的服务，支持用户将来自不同厂商的Agent进行集中注册与管理，实现多源Agent的可控接入与维护。
 ## 交付形式
-1. 首次开源仅交付源码（托管在github），不提供安装包，交付内容不包括构建工程
+首次开源仅交付源码（托管在github），不提供安装包，交付内容不包括构建工程。
 ## 功能说明
 1. 本项目提供Agent注册中心模块供客户系统集成，用于管理客户系统内部的Agent，提供Agent注册、Agent查询能力。
 2. 默认所注册的Agent会作为公共资源，暂无Agent所有者设计。
 3. 本项目仅用作功能模块，非完整系统，模块自身不提供登录认证、鉴权、用户管理、日志审计、加解密、秘钥管理、数据库等能力，需由客户系统提供如上安全基础设施；源码中已预留相关方法函数，供二次定制实现。
 4. 本项目对注册的AgentCard信息默认使用文件存储：data/agentcard.json，测试场景下可以手动修改文件，重启服务生效。
-5. ![photo](docs/zh/images/integrated_interactive_relationship.png)
+
+<img src="docs/zh/images/integrated_interactive_relationship.png" width="600" alt="系统集成交互关系" />
 
 ## 设计约束
 1. 本项目生产环境需要运行在Linux系统上，支持IPv4环境。Windows环境下可启动用于开发调试。
@@ -53,17 +54,14 @@ PORT=5000
 配置文件：{安装目录}/etc/conf/server.conf
 默认配置如下，可按需修改：
 
+```ini
 ssl_certfile=etc/ssl/server.cer
-
 ssl_keyfile=etc/ssl/server_key.pem
-
 ssl_keyfile_password=etc/ssl/cert_pwd
-
 ssl_ca_certs=etc/ssl/trust.cer
-
 verify_client=true
-
 enable_https=true
+```
 如果沒有证书或者不想校验证书，将enable_https字段设置为false即可
 
 配置文件：{安装目录}/etc/conf/persistence.conf
@@ -108,10 +106,11 @@ revocationlist.crl:可选，吊销列表，仅支持pem编码格式，仅支持.
 > Windows启动会输出警告日志，因为内置服务使用TCP协议（127.0.0.1:1108）替代UDS，仅用于开发调试，生产环境请使用Linux。
 #### 1. 创建虚拟环境
 下载本项目代码后，使用pycharm打开，在pycharm中创建一个虚拟环境
-![photo](docs/zh/images/create_virtual_environment.png)
+<img src="docs/zh/images/create_virtual_environment.png" width="500" alt="创建虚拟环境" />
 
 点击`Add new Interpreter`, 再点击`Add Local Interpreter...`
-![photo](docs/zh/images/create_virtual_environment_1.png)
+
+<img src="docs/zh/images/create_virtual_environment_1.png" width="500" alt="添加本地解释器" />
    
 选择python版本和路径，点击`ok`即可
 
@@ -128,7 +127,7 @@ python -m agent_registry.start
 或者打开{安装目录}/agent_registry/start.py文件，右键`Run start`即可。
 #### 4.查看是否启动成功
 如下图，表示启动成功，如果没有看到该提示，则按照报错信息提示修改后重新尝试启动。
-![photo](docs/zh/images/run_success.png)
+<img src="docs/zh/images/run_success.png" width="600" alt="启动成功" />
 
 ### linux启动方式
 #### 1. 创建虚拟环境

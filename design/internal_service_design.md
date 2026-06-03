@@ -1082,7 +1082,7 @@ def _load(self) -> None:
 - AgentCard存储不含status字段
 - 状态通过_status_map关联
 
-#### 3.2.5 start.py修改
+#### 3.2.6 start.py修改
 
 启动UDS内部交互服务：
 
@@ -1429,7 +1429,7 @@ def test_approval_uds_interface():
     assert result['error'] == "Approval function is disabled"
 ```
 
-### 4.2 成成测试
+### 4.2 集成测试
 
 #### 4.2.1 完整流程测试
 
