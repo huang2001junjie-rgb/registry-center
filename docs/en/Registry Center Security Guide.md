@@ -99,7 +99,7 @@ Configuration scenarios where operation isolation is not enabled:<br>
 - HTTPS communication with client certificate verification enabled, the operation isolation switch is turned on, the validation mode is relaxed (owner.validation.mode=relaxed), and the operator identity was empty during AgentCard registration.<br>
 <br>
 In these scenarios, operation isolation is not enforced, and all clients can perform modification and deletion operations on any AgentCard. This mechanism is only suitable for interactions within a trusted domain; otherwise, there is a risk of AgentCard tampering.<br>
-```
+```properties
 # server.conf configuration file
 
 # Whether to enable owner validation logic
@@ -302,7 +302,7 @@ Required, private key file, only PEM encoding format supported<br>
 Private key and public key matching: must match the public key in server.cer<br>
 The private key file must be protected by a private key password. The private key password must meet complexity requirements: at least 8 characters, containing at least two character types (digits, uppercase letters, lowercase letters, special characters `` `~!@#$%^&*()-_=+ | [{}]);:'",<.>/? `` and spaces)<br>
 
-The signature verification public key can be obtained via the GET /rest/v1/registry-center/keys interface. This interface has no request parameters and returns the public key content from the signing public key certificate sign_certfile configured in the init command in standard JWKS format. For the interface definition, refer to the [Registry Center API Reference](./Registry%20Center%20API%20Reference.md#get-public-key)<br>
+The signature verification public key can be obtained via the GET /rest/v1/registry-center/keys interface. This interface has no request parameters and returns the public key content from the signing public key certificate sign_certfile configured in the init command in standard JWKS format. For the interface definition, refer to the [Registry Center API Reference](./Registry%20Center%20API%20Reference.md#get-public-key-information)<br>
 
 For debugging scenarios, the [Self-Signed Certificate Generation Tool](#self-signed-certificate-generation-tool) can be used to generate the two certificate files that meet the above requirements. Note that such certificates must not be used in production environments.<br>
 

@@ -188,6 +188,7 @@ See the [API Reference](docs/en/Registry%20Center%20API%20Reference.md) for full
 | `common/config/llm_config.json` | LLM model endpoints for semantic search (OpenAI-compatible or AOC) |
 
 Configure interactively:
+
 ```bash
 python -m agent_registry.init
 ```

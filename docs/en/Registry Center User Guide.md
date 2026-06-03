@@ -15,6 +15,7 @@ Applied to unified AgentCard registration and management in multi-vendor, multi-
 2. This project is only a functional module, not a complete system. The module itself does not provide login authentication, authorization, user management, encryption/decryption, or key management capabilities; these security infrastructure components must be provided by the customer's system. Callback functions have been reserved in the source code for custom implementation.
 
 ### Design Constraints
+
 1. This project must run on Linux systems and supports IPv4 environments.
 
 2. It must be deployed as an internal system and cannot be exposed to the public internet or deployed as a cloud service; otherwise, the target system must simultaneously provide a firewall and a web server to implement security capabilities such as authentication and authorization.
@@ -212,7 +213,7 @@ agent-registry>
 - **Delete Specific AgentCard**: Delete an AgentCard that is no longer in use. See [Registry Center API Reference](./Registry Center API Reference.md#delete-specific-agentcard).
 - **Semantic Search AgentCard**: Search for matching AgentCards based on natural language semantics. See [Registry Center API Reference](./Registry Center API Reference.md#semantic-search-agentcard).
 
-# Appendix
+## Appendix
 
 ## Configuration File Quick Reference
 
@@ -270,7 +271,7 @@ agent-registry>
 | data/agentregistry.json | Agent metadata (status, owner, tags, etc.) |
 | data/tags.json | Tag entity data |
 
-# FAQ
+## FAQ
 
 ### Q1: What should I do if "Duplicate Agent" is prompted when registering an Agent?
 

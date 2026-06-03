@@ -353,9 +353,9 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
     return agents
 ```
 
-### 2.4 UDS内部交互服务设计
+### 2.5 UDS内部交互服务设计
 
-#### 2.4.1 统一Socket架构
+#### 2.5.1 统一Socket架构
 
 **设计理念：**
 
@@ -407,7 +407,7 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
 └──────────────────┘
 ```
 
-#### 2.4.2 协议设计
+#### 2.5.2 协议设计
 
 **UDS Socket路径：** `run/registry-center/internal.sock`
 
@@ -460,7 +460,7 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
 
 > **注**：早期设计中的 `config`、`stats`、`query` action 尚未在当前版本中实现。
 
-#### 2.4.3 进程架构
+#### 2.5.3 进程架构
 
 **部署方案：同进程多线程**
 
@@ -496,7 +496,7 @@ async def list_agents(name: Optional[str] = None, organization: Optional[str] = 
 4. **管理简单**：只需启动/停止一个进程
 5. **Socket路径在项目目录**：`run/registry-center/internal.sock`
 
-#### 2.4.4 文件结构
+#### 2.5.4 文件结构
 
 ```
 agent_registry/
@@ -599,7 +599,7 @@ class RegistryCenterService:
             conn.close()
 ```
 
-#### 2.4.5 客户端设计
+#### 2.5.5 客户端设计
 
 **客户端代码：**
 
@@ -678,7 +678,7 @@ class RegistryClient:
         return self._send_request(request)
 ```
 
-#### 2.4.6 UDS访问控制
+#### 2.5.6 UDS访问控制
 
 **权限设计：**
 
@@ -700,7 +700,7 @@ srw-rw---- 1 root registry_group 0 Jan 1 12:00 run/registry-center/internal.sock
 2. 普通用户无法访问UDS socket
 3. 通过文件权限自动实现访问控制
 
-#### 2.4.7 审核接口流程图
+#### 2.5.7 审核接口流程图
 
 ```
 ┌─────────────────────────────────┐
@@ -1696,7 +1696,7 @@ for agent in registered_agents:
 
 ### 5.6 监控和日志
 
-#### 5.4.1 审核日志
+#### 5.6.1 审核日志
 
 ```python
 # 记录审核操作日志

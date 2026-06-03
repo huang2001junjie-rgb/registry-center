@@ -188,6 +188,7 @@ flowchart TB
 | `common/config/llm_config.json` | 语义检索的 LLM 模型端点（兼容 OpenAI 格式或 AOC 平台） |
 
 交互式配置：
+
 ```bash
 python -m agent_registry.init
 ```
