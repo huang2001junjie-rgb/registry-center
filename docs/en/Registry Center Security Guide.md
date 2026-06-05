@@ -193,7 +193,7 @@ In the AgentCard registration REST interface, the following fields in the AgentC
 
 Registrations containing description keywords from the following blacklist will be rejected. This mechanism is enabled by default and cannot be disabled.<br>
 
-> For the complete blacklist of prompt injection keywords and high-risk skill description keywords, see: [AgentCard Security Registration Specification - Appendix: Complete Blacklist](../../design/AgentCard_Security_Specification.md#7-appendix-complete-blacklist)
+> For the complete blacklist of prompt injection keywords and high-risk skill description keywords, see: [Appendix: Complete Blacklist](#appendix-complete-blacklist)
 
 
 ### AgentCard Integrity Validation
@@ -360,3 +360,23 @@ Successfully generated self-signed certificates in testDir
 
 Upon successful execution, a PEM-encoded X.509v3 self-signed certificate will be generated in the specified path:<br>
 The certificate key algorithm is RSA, with a key length of 3072, a certificate validity period of 99 years, issuer and subject (CN field of both issuer and subject) are both agent-registry, SAN is not set. Certificate file permissions are 600, and the directory permissions are 700.<br>
+
+## Appendix: Complete Blacklist
+
+**Prompt Injection Keyword Blacklist:**
+
+| Category | English Keywords |
+|------|-----------|
+| Instruction Override (14 items) | ignore previous instructions, ignore previous commands<br>ignore all instructions, ignore all commands<br>ignore above instructions, disregard instructions<br>ignore limits, ignore restrictions<br>ignore rules, ignore constraints<br>ignore security<br>override instructions, overwrite instructions<br>override rules, override system<br>forget previous, forget all, forget instructions |
+| System Attack (8 items) | jailbreak, crack, bypass<br>break limits, break restrictions<br>developer mode, admin mode, administrator mode<br>superuser, prompt injection |
+| Forced Execution (9 items) | must execute, must output, must answer<br>no matter what, regardless<br>must, definitely<br>unconditional execution, force execute, forced execution<br>execute immediately |
+| Special Markers (12 items) | encoding bypass<br>\</system\>, \</instruction\>, \</prompt\><br>[END], [DONE], [FINISHED]<br>assistant:, system:, user: |
+
+**High-Risk Skill Description Keyword Blacklist:**
+
+| Category | English Keywords |
+|------|-----------|
+| Privilege Attack (12 items) | privilege escalation, escalate privileges<br>elevate privileges, raise privileges<br>gain privileges, obtain privileges<br>bypass security, bypass protection<br>bypass authentication, bypass verification<br>break security, break protection<br>security bypass<br>illegal admin privileges, unauthorized admin privileges<br>illegal superuser privileges, illegal root privileges |
+| Database Attack (2 items) | database injection, SQL injection |
+| Data Theft (11 items) | steal keys, steal secret keys<br>steal passwords, steal credentials<br>illegally obtain keys, illegally obtain passwords<br>illegally obtain credentials<br>steal data, data exfiltration<br>data leak, steal privacy<br>steal private data, illegally obtain privacy |
+| Network Attack (6 items) | network attack, network penetration<br>network intrusion, port scan<br>vulnerability scan, attack scan |
