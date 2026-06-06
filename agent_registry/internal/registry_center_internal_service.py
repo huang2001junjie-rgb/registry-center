@@ -33,7 +33,7 @@ from agent_registry.internal.handlers.tag_handler import (
 from agent_registry.internal.protocols.actions import Action
 from agent_registry.internal.protocols.request import InternalRequest
 from agent_registry.registry_instance import get_registry
-from common.util.config_util import get_conf
+from common.util.app_config import get_conf
 
 
 class RequestDispatcher:

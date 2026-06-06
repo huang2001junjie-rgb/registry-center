@@ -23,7 +23,7 @@ from pydantic import ValidationError
 from agent_registry.internal.protocols.request import InternalRequest
 from agent_registry.internal.registry_center_internal_service import RequestDispatcher
 from agent_registry.registry_instance import get_registry
-from common.util.config_util import get_conf
+from common.util.app_config import get_conf
 
 
 DEFAULT_TCP_PORT = 1108

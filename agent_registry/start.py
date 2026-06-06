@@ -34,8 +34,8 @@ from common.custom.custom_handle import HandlerRegistry
 from common.custom.interface_type import InterfaceType
 from common.log.audit_logger import LogLevel, OperationResult, OperatorObject, OperationName
 from common.util.cipher_util import DEFAULT_ENCODING
-from common.util.conf_util import conf_singleton_obj, load_cert_password, set_ssl_folder_permissions
-from common.util.config_util import get_conf
+from common.util.ssl_config import conf_singleton_obj, load_cert_password, set_ssl_folder_permissions
+from common.util.app_config import get_conf
 
 audit_handle = HandlerRegistry.get_handler(InterfaceType.AUDIT)
 

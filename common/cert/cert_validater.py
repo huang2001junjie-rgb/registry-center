@@ -26,7 +26,7 @@ from common.cert import cert_parser
 from common.cert.x509_obj import X509Obj
 from common.util.cipher_util import DEFAULT_ENCODING
 from common.util.conf_obj import ConfObj
-from common.util.conf_util import load_cert_password
+from common.util.ssl_config import load_cert_password
 from common.util.constant_param import CONFIG_FILE_PATH
 from common.util.validation_result import ValidationResult
 

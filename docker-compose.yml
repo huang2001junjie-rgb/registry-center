@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  registry-center:
+    build: .
+    container_name: registry-center
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/opt/registry-center/data
+      - ./etc/ssl:/opt/registry-center/etc/ssl
+      - ./etc/sign_cert:/opt/registry-center/etc/sign_cert
+      - ./log:/opt/registry-center/log
+    environment:
+      - REGISTRY_IP=0.0.0.0
+      - REGISTRY_PORT=5000
+      - REGISTRY_ENABLE_HTTPS=true
+      - REGISTRY_VERIFY_CLIENT=false
+      - REGISTRY_OWNER_ISOLATION_ENABLED=false
+      - REGISTRY_AGENT_APPROVAL_ENABLED=false
+      - REGISTRY_SIGNATURE_VALIDATION_ENABLED=false
+      - REGISTRY_FORWARDED_ALLOW_IPS=*
+    restart: unless-stopped
+
+  # ---- Optional: PostgreSQL for production persistence ----
+  # To enable: uncomment the block below and add REGISTRY_PERSISTENCE_MODE=postgresql
+  #             + REGISTRY_POSTGRESQL_HOST=postgres to the environment above.
+  #
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: registry-postgres
+  #   environment:
+  #     - POSTGRES_DB=registry_center
+  #     - POSTGRES_USER=opena2a_t
+  #     - POSTGRES_PASSWORD=openA2A_T
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   restart: unless-stopped
+  #
+  # volumes:
+  #   pgdata:

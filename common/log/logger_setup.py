@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from loguru import logger
 
-from common.util.config_util import get_root_path
+from common.util.app_config import get_root_path
 
 root_path = get_root_path()
 _LOG_DIR = Path(root_path) / "log"

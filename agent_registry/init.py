@@ -8,7 +8,7 @@ from loguru import logger
 
 from common.cert.cert_parser import parse_cer_certificate, parse_pem_files
 from common.util.cipher_util import encrypt, DEFAULT_ENCODING
-from common.util.config_util import get_root_path
+from common.util.app_config import get_root_path
 from common.util.password_util import input_password_with_validation
 
 

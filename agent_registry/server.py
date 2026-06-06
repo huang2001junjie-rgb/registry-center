@@ -59,7 +59,7 @@ from agent_registry.signature.public_key_manager import PublicKeyManager
 from common.custom.custom_handle import HandlerRegistry
 from common.custom.interface_type import InterfaceType
 from common.log.audit_logger import OperationResult, LogLevel, OperatorObject, OperationName
-from common.util.config_util import get_conf
+from common.util.app_config import get_conf
 from common.cert.cert_cn_parser import validate_cn
 
 # ---------- Rate Limiter Setup (In-Memory) ----------

@@ -15,8 +15,7 @@
 
 import platform
 
-from common.util.config_util import get_conf
-from common.util.conf_util import get_persistence_conf
+from common.util.app_config import get_conf, get_persistence_conf
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"

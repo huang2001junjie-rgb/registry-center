@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+.idea/
+venv/
+.venv
+.git
+.gitignore
+log/
+data/*.json
+README.md
+README_zh.md
+docs/
+design/
+tests/
+bin/
+etc/systemd/

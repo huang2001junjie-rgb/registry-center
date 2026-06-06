@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict, Any
 from loguru import logger
 
-from common.util.config_util import get_root_path, load_configs
+from common.util.app_config import get_root_path, load_configs
 
 # File permissions: 600 -> owner read/write only, others no access
 FILE_PERMISSION_MODE = 0o600

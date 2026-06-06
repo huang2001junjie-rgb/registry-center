@@ -18,7 +18,7 @@ from typing import List, Tuple, Optional
 
 from loguru import logger
 
-from common.util.config_util import get_conf
+from common.util.app_config import get_conf
 
 
 class TagValidator:

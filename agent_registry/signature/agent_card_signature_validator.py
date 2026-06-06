@@ -3,7 +3,7 @@ import base64
 from typing import Optional, List, Dict, Any
 from loguru import logger
 
-from common.util.config_util import get_conf
+from common.util.app_config import get_conf
 from a2a.types import AgentCard
 from a2a.utils.signing import create_signature_verifier, InvalidSignaturesError, NoSignatureError
 from google.protobuf.json_format import MessageToDict
