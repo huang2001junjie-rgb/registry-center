@@ -121,7 +121,7 @@
           "version": "1.0.0",
           "provider": {
             "organization": "Org",
-            "url": "https://www.org.com"
+            "url": "https://example.com"
           },
           "skills": [
             {

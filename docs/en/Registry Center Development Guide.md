@@ -62,7 +62,7 @@ Registry Center is a service focused on unified Agent management, enabling users
 1. Obtain the source code
 
     ```bash
-    git clone https://gitcode.com/OpenAN/registry-center.git
+    git clone https://github.com/project-openan/registry-center.git
     cd registry-center
     ```
 

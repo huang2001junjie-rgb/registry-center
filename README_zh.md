@@ -20,7 +20,7 @@ SPDX-License-Identifier: Apache-2.0
 # A2A-T AgentCard 注册中心
 
 <p align="center">
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green.svg" alt="License"></a>
 </p>
 
@@ -71,7 +71,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ```bash
 # 克隆仓库
-git clone https://gitcode.com/OpenAN/registry-center.git
+git clone https://github.com/project-openan/registry-center.git
 cd registry-center
 
 # 创建并激活虚拟环境
