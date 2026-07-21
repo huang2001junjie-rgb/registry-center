@@ -102,14 +102,22 @@ SKIP_INIT=false
 LOCAL_MODE=false
 
 usage() {
-    echo "Usage: $0 [OPTIONS]"
+    echo "Usage: $0 [MODE] [OPTIONS]"
+    echo ""
+    echo "Modes:"
+    echo "  (default)             Install to /opt/registry-center (requires root/sudo)"
+    echo "  --local               Install to ./registry-center (for testing without root)"
+    echo "  --target DIR          Install to a custom directory"
     echo ""
     echo "Options:"
-    echo "  --target DIR          Installation directory (default: /opt/registry-center)"
-    echo "  --local               Install to ./registry-center (for testing without root)"
     echo "  --install-service     Install systemd service after setup"
     echo "  --skip-init           Skip interactive initialization"
     echo "  --help                Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  sudo ./dist/registry-center-VERSION-linux-universal.run"
+    echo "  ./dist/registry-center-VERSION-linux-universal.run --local"
+    echo "  ./dist/registry-center-VERSION-linux-universal.run --target ~/my-registry"
     exit 0
 }
 
@@ -569,8 +577,16 @@ def main():
         print("=" * 60)
         print(f"\n  Output: {output_file}")
         print(f"\n  Usage on target machine:")
-        print(f"    chmod +x {output_file.name}")
-        print(f"    ./{output_file.name} --target /opt/registry-center")
+        print(f"    chmod +x ./dist/{output_file.name}")
+        print(f"")
+        print(f"    Mode 1 - Default (requires sudo):")
+        print(f"      sudo ./dist/{output_file.name}")
+        print(f"")
+        print(f"    Mode 2 - Local (no root needed):")
+        print(f"      ./dist/{output_file.name} --local")
+        print(f"")
+        print(f"    Mode 3 - Custom path:")
+        print(f"      ./dist/{output_file.name} --target ~/registry-center")
         print()
 
     finally:
