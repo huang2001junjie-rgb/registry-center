@@ -184,6 +184,25 @@ echo -e "${GREEN}  Python: $PYTHON_CMD ($($PYTHON_CMD --version))${NC}"
 
 # --- Step 3: Extract files ---
 echo -e "${CYAN}[3/7] Extracting files to $TARGET_DIR ...${NC}"
+
+# Check write permission to target directory
+TARGET_PARENT=$(dirname "$TARGET_DIR")
+if [ -d "$TARGET_DIR" ]; then
+    if [ ! -w "$TARGET_DIR" ]; then
+        echo -e "${RED}Error: Permission denied to write to $TARGET_DIR${NC}"
+        echo "  Please run with sudo or specify a writable directory:"
+        echo "    sudo $0 $*"
+        echo "    $0 --target ~/registry-center"
+        exit 1
+    fi
+elif [ ! -d "$TARGET_PARENT" ] || [ ! -w "$TARGET_PARENT" ]; then
+    echo -e "${RED}Error: Permission denied to create $TARGET_DIR${NC}"
+    echo "  Please run with sudo or specify a writable directory:"
+    echo "    sudo $0 $*"
+    echo "    $0 --target ~/registry-center"
+    exit 1
+fi
+
 if [ -d "$TARGET_DIR" ] && [ "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
     echo -e "${YELLOW}  Warning: Target directory is not empty.${NC}"
     read -p "  Overwrite? (y/n): " choice
