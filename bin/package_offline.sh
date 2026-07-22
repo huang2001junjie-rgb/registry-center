@@ -74,10 +74,21 @@ if [[ "$TARGET_ARCH" != "x86_64" && "$TARGET_ARCH" != "aarch64" ]]; then
     exit 1
 fi
 
-# Map arch to pip platform tag
+# Build list of pip platform tags (newer packages like cryptography require manylinux_2_28+)
+PIP_PLATFORMS=()
 case "$TARGET_ARCH" in
-    x86_64)  PIP_PLATFORM="manylinux2014_x86_64" ;;
-    aarch64) PIP_PLATFORM="manylinux2014_aarch64" ;;
+    x86_64)
+        PIP_PLATFORMS+=("manylinux_2_34_x86_64")
+        PIP_PLATFORMS+=("manylinux_2_28_x86_64")
+        PIP_PLATFORMS+=("manylinux_2_17_x86_64")
+        PIP_PLATFORMS+=("manylinux2014_x86_64")
+        ;;
+    aarch64)
+        PIP_PLATFORMS+=("manylinux_2_34_aarch64")
+        PIP_PLATFORMS+=("manylinux_2_28_aarch64")
+        PIP_PLATFORMS+=("manylinux_2_17_aarch64")
+        PIP_PLATFORMS+=("manylinux2014_aarch64")
+        ;;
 esac
 
 PKG_NAME="registry-center-${VERSION}-linux-${TARGET_ARCH}"
@@ -90,7 +101,7 @@ echo -e "${GREEN}============================================${NC}"
 echo "  Version:        ${VERSION}"
 echo "  Target arch:    ${TARGET_ARCH}"
 echo "  Python version: ${PYTHON_VERSION}"
-echo "  Pip platform:   ${PIP_PLATFORM}"
+echo "  Pip platforms:  ${PIP_PLATFORMS[*]}"
 echo "  Output:         ${OUTPUT_DIR}"
 echo ""
 
@@ -120,20 +131,25 @@ mkdir -p "${BUILD_DIR}/log" "${BUILD_DIR}/run" "${BUILD_DIR}/data"
 echo "  Source copied."
 
 # --- Step 3: Download wheel packages ---
-echo -e "${GREEN}[3/5] Downloading wheel packages for ${PIP_PLATFORM}...${NC}"
+echo -e "${GREEN}[3/5] Downloading wheel packages for ${TARGET_ARCH}...${NC}"
 mkdir -p "$WHEELS_DIR"
 
-# First pass: download binary wheels for target platform
+# Build --platform flags for pip download
+PLATFORM_FLAGS=()
+for p in "${PIP_PLATFORMS[@]}"; do
+    PLATFORM_FLAGS+=("--platform" "$p")
+done
+
+# First pass: download binary wheels for target platform (all manylinux variants)
 pip download \
     -r "${ROOT_DIR}/requirements.txt" \
-    --platform "$PIP_PLATFORM" \
+    "${PLATFORM_FLAGS[@]}" \
     --python-version "$PYTHON_VERSION" \
     --only-binary=:all: \
     --dest "$WHEELS_DIR" \
     2>&1 | sed 's/^/  /'
 
-# Second pass: download pure-Python packages that may have been missed
-# (some packages only provide 'any' platform wheels)
+# Second pass: download pure-Python packages (platform 'any')
 pip download \
     -r "${ROOT_DIR}/requirements.txt" \
     --platform any \
@@ -178,6 +194,7 @@ Quick Start:
      ./bin/setup_offline.sh --skip-init
 
   4. Start the service:
+     source venv/bin/activate
      ./bin/start.sh
 
   5. Stop the service:
@@ -231,5 +248,6 @@ echo "  Transfer this file to the offline machine, then:"
 echo "    tar -xzf ${PKG_NAME}.tar.gz"
 echo "    cd ${PKG_NAME}"
 echo "    ./bin/setup_offline.sh"
+echo "    source venv/bin/activate"
 echo "    ./bin/start.sh"
 echo -e "${GREEN}============================================${NC}"

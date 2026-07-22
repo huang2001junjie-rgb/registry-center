@@ -25,7 +25,7 @@
 # interactive configuration.
 #
 # Usage:
-#   ./bin/setup_offline.sh [--skip-init]
+#   ./bin/setup_offline.sh [--skip-init] [--python=python3.12]
 # ============================================================================
 
 set -euo pipefail
@@ -42,17 +42,20 @@ VENV_DIR="${ROOT_DIR}/venv"
 WHEELS_DIR="${ROOT_DIR}/wheels"
 REQUIREMENTS_FILE="${ROOT_DIR}/requirements.txt"
 SKIP_INIT="false"
+PYTHON_CMD=""
 
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
         --skip-init) SKIP_INIT="true" ;;
+        --python=*) PYTHON_CMD="${arg#*=}" ;;
         -h|--help)
-            echo "Usage: $0 [--skip-init]"
+            echo "Usage: $0 [--skip-init] [--python=PATH]"
             echo ""
             echo "Options:"
-            echo "  --skip-init    Skip interactive configuration wizard"
-            echo "  -h, --help     Show this help"
+            echo "  --skip-init      Skip interactive configuration wizard"
+            echo "  --python=PATH    Python interpreter to use (default: auto-detect python3.12)"
+            echo "  -h, --help       Show this help"
             exit 0
             ;;
         *) echo -e "${RED}Unknown option: $arg${NC}"; exit 1 ;;
@@ -64,17 +67,25 @@ echo -e "${GREEN} Registry Center - Offline Setup${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
 
-# --- Step 1: Check Python3 ---
-echo -e "${GREEN}[1/4] Checking Python3...${NC}"
+# --- Step 1: Check Python ---
+echo -e "${GREEN}[1/4] Checking Python...${NC}"
 
-PYTHON_CMD=""
-if command -v python3 &>/dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &>/dev/null; then
-    PYTHON_CMD="python"
-else
-    echo -e "${RED}Error: Python3 is not installed or not in PATH.${NC}"
-    echo "Please install Python 3.10+ and try again."
+if [ -z "$PYTHON_CMD" ]; then
+    if command -v python3.12 &>/dev/null; then
+        PYTHON_CMD="python3.12"
+    elif command -v python3 &>/dev/null; then
+        PYTHON_CMD="python3"
+    elif command -v python &>/dev/null; then
+        PYTHON_CMD="python"
+    else
+        echo -e "${RED}Error: Python3 is not installed or not in PATH.${NC}"
+        echo "Please install Python 3.12 and try again."
+        exit 1
+    fi
+fi
+
+if ! command -v "$PYTHON_CMD" &>/dev/null; then
+    echo -e "${RED}Error: Python command not found: $PYTHON_CMD${NC}"
     exit 1
 fi
 
@@ -167,8 +178,9 @@ echo -e "${GREEN}============================================${NC}"
 echo ""
 echo "  Next steps:"
 echo "    1. Place TLS certificates in etc/ssl/ (if HTTPS enabled)"
-echo "    2. Start the service:  ./bin/start.sh"
-echo "    3. Stop the service:   ./bin/stop.sh"
+echo "    2. Activate venv:  source venv/bin/activate"
+echo "    3. Start service:  ./bin/start.sh"
+echo "    4. Stop service:   ./bin/stop.sh"
 echo ""
 echo "  Re-configure anytime:"
 echo "    ./venv/bin/python -m agent_registry.init"
